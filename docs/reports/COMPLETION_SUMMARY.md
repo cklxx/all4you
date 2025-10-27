@@ -110,8 +110,8 @@
 ├── examples/
 │   └── sample_data.json           # 示例数据
 ├── README.md                       # 项目说明 ⭐
-├── QUICKSTART.md                   # 快速开始
-├── MODELSCOPE_GUIDE.md             # ModelScope 指南 ⭐
+├── docs/getting-started.md                   # 快速开始
+├── docs/integrations/modelscope.md             # ModelScope 指南 ⭐
 ├── CHANGELOG.md                    # 变更日志
 ├── BUGFIX_REPORT.md                # Bug 修复报告
 ├── FINAL_REPORT.md                 # 完整报告
@@ -176,10 +176,10 @@ npm run dev
 
 | 文档 | 用途 | 推荐人群 |
 |------|------|---------|
-| [README.md](README.md) | 项目概览和快速开始 | 所有用户 ⭐ |
-| [QUICKSTART.md](QUICKSTART.md) | 详细安装和使用指南 | 新手用户 |
-| [MODELSCOPE_GUIDE.md](MODELSCOPE_GUIDE.md) | ModelScope 完整指南 | 国内用户 ⭐ |
-| [CHANGELOG.md](CHANGELOG.md) | 版本变更记录 | 开发者 |
+| [README.md](../README.md) | 项目概览和快速开始 | 所有用户 ⭐ |
+| [快速上手指南](../getting-started.md) | 详细安装和使用指南 | 新手用户 |
+| [ModelScope 集成指南](../integrations/modelscope.md) | ModelScope 完整指南 | 国内用户 ⭐ |
+| [CHANGELOG.md](../CHANGELOG.md) | 版本变更记录 | 开发者 |
 | [BUGFIX_REPORT.md](BUGFIX_REPORT.md) | Bug 修复详情 | 开发者 |
 | [FINAL_REPORT.md](FINAL_REPORT.md) | 完整功能报告 | 所有用户 |
 | [PROJECT_SUMMARY.md](PROJECT_SUMMARY.md) | 技术架构总结 | 开发者 |
@@ -323,9 +323,9 @@ npm run dev
 ## 📞 获取帮助
 
 ### 文档
-- 查看 [README.md](README.md) - 快速开始
-- 查看 [MODELSCOPE_GUIDE.md](MODELSCOPE_GUIDE.md) - ModelScope 指南
-- 查看 [QUICKSTART.md](QUICKSTART.md) - 详细指南
+- 查看 [README.md](../README.md) - 快速开始
+- 查看 [ModelScope 集成指南](../integrations/modelscope.md) - ModelScope 指南
+- 查看 [快速上手指南](../getting-started.md) - 详细指南
 
 ### 日志
 ```bash

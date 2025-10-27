@@ -87,7 +87,7 @@ async def upload_data_file(
             format_type=format_type,
             total_samples=len(data),
             file_size=len(content),
-            metadata={
+            metadata_json={
                 "validation": validation_report,
                 "original_filename": file.filename
             }

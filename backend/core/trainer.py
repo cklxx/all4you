@@ -5,20 +5,42 @@ Integrates with Transformers, PEFT, and Unsloth for efficient training
 
 import os
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, TYPE_CHECKING
 from dataclasses import dataclass, asdict
 import json
 from loguru import logger
 
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    TrainingArguments,
-    Trainer,
-    DataCollatorForSeq2Seq,
-)
-from peft import get_peft_model, LoraConfig
-from datasets import Dataset
+try:  # Optional heavy dependency, imported lazily when available
+    from transformers import (
+        AutoModelForCausalLM,
+        AutoTokenizer,
+        TrainingArguments,
+        Trainer,
+        DataCollatorForSeq2Seq,
+    )
+    from transformers.trainer_callback import TrainerCallback
+    _TRANSFORMERS_IMPORT_ERROR = None
+except ImportError as exc:  # pragma: no cover - handled gracefully
+    AutoModelForCausalLM = None
+    AutoTokenizer = None
+    TrainingArguments = None
+    Trainer = None
+    DataCollatorForSeq2Seq = None
+    TrainerCallback = None
+    _TRANSFORMERS_IMPORT_ERROR = exc
+
+try:  # Optional dependency for LoRA fine-tuning
+    from peft import get_peft_model, LoraConfig
+    _PEFT_IMPORT_ERROR = None
+except ImportError as exc:  # pragma: no cover - handled gracefully
+    get_peft_model = None
+    LoraConfig = None
+    _PEFT_IMPORT_ERROR = exc
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from datasets import Dataset
+else:
+    Dataset = Any
 
 from core.model_manager import get_model_manager
 
@@ -110,8 +132,17 @@ class Trainer_Qwen3:
         self.trainer = None
         logger.info(f"Initialized Trainer with config: {config.model_name}")
 
+    @staticmethod
+    def _ensure_transformers_available():
+        """Ensure transformers is installed before executing transformer-specific logic."""
+        if AutoModelForCausalLM is None or AutoTokenizer is None:
+            raise ImportError(
+                "transformers is required for training operations. Install it with 'pip install transformers'."
+            ) from _TRANSFORMERS_IMPORT_ERROR
+
     def load_model_and_tokenizer(self):
         """Load model and tokenizer"""
+        self._ensure_transformers_available()
         logger.info(f"Loading model: {self.config.model_name}")
 
         # Use Unsloth if available and not using quantization
@@ -154,6 +185,7 @@ class Trainer_Qwen3:
 
     def _load_model_standard(self) -> tuple:
         """Load model using standard Transformers"""
+        self._ensure_transformers_available()
         # Load tokenizer
         tokenizer = AutoTokenizer.from_pretrained(
             self.config.model_name,
@@ -186,6 +218,10 @@ class Trainer_Qwen3:
 
         # Add LoRA
         if self.config.training_method == "lora":
+            if LoraConfig is None or get_peft_model is None:
+                raise ImportError(
+                    "peft is required for LoRA training. Install it with 'pip install peft'."
+                ) from _PEFT_IMPORT_ERROR
             lora_config = LoraConfig(
                 r=self.config.lora_rank,
                 lora_alpha=self.config.lora_alpha,
@@ -245,8 +281,14 @@ class Trainer_Qwen3:
 
         return dataset
 
-    def train(self, train_dataset: Dataset, eval_dataset: Optional[Dataset] = None):
+    def train(
+        self,
+        train_dataset: Dataset,
+        eval_dataset: Optional[Dataset] = None,
+        callbacks: Optional[List[Any]] = None,
+    ):
         """Start training"""
+        self._ensure_transformers_available()
         logger.info("Starting training")
 
         # Prepare dataset
@@ -291,6 +333,7 @@ class Trainer_Qwen3:
                 return_tensors="pt",
                 padding=True,
             ),
+            callbacks=callbacks,
         )
 
         # Start training
@@ -300,6 +343,7 @@ class Trainer_Qwen3:
 
     def save_model(self, output_dir: str):
         """Save model and tokenizer"""
+        self._ensure_transformers_available()
         logger.info(f"Saving model to {output_dir}")
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 

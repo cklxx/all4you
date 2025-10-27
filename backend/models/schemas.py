@@ -109,6 +109,13 @@ class TrainingTaskResponse(BaseModel):
     current_loss: Optional[float]
     best_loss: Optional[float]
 
+    progress_percentage: int = Field(
+        default=0,
+        ge=0,
+        le=100,
+        description="Training progress in percentage (0-100)",
+    )
+
     output_dir: Optional[str]
     log_file: Optional[str]
 

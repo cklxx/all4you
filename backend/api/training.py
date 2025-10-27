@@ -3,6 +3,7 @@ Training API endpoints
 Handle training task creation, monitoring, and management
 """
 
+import math
 import uuid
 from typing import Optional
 from datetime import datetime
@@ -27,6 +28,17 @@ settings = Settings()
 
 # Store for background task tracking
 _training_tasks = {}
+
+
+def _calculate_progress(completed_steps: Optional[int], total_steps: Optional[int]) -> int:
+    """Calculate progress percentage safely"""
+    if not total_steps or total_steps <= 0:
+        return 0
+
+    completed = completed_steps or 0
+    percentage = round((completed / total_steps) * 100)
+    # Clamp to [0, 100]
+    return max(0, min(100, percentage))
 
 
 async def run_training_task(task_id: str):
@@ -57,6 +69,9 @@ async def run_training_task(task_id: str):
             db_session.commit()
             return
 
+        # Create trainer configuration early for downstream calculations
+        trainer_config = TrainerConfig.from_dict(task.config)
+
         # Load data
         logger.info(f"Loading data from: {data_file.file_path}")
         data = DataProcessor.load_and_format_data(
@@ -68,16 +83,82 @@ async def run_training_task(task_id: str):
         # Create dataset
         hf_dataset = DataProcessor.create_huggingface_dataset(data, data_file.format_type)
 
+        # Estimate total training steps based on dataset size and configuration
+        try:
+            total_samples = len(hf_dataset)
+        except TypeError:
+            total_samples = getattr(hf_dataset, "num_rows", 0) or 0
+
+        samples_per_step = max(
+            1,
+            trainer_config.per_device_train_batch_size * trainer_config.gradient_accumulation_steps,
+        )
+        steps_per_epoch = math.ceil(total_samples / samples_per_step) if total_samples else 0
+        estimated_total_steps = steps_per_epoch * max(1, trainer_config.num_train_epochs)
+        if trainer_config.max_steps and trainer_config.max_steps > 0:
+            estimated_total_steps = min(estimated_total_steps, trainer_config.max_steps)
+
+        task.total_steps = estimated_total_steps
+        task.completed_steps = 0
+        db_session.commit()
+
         # Create trainer
-        trainer_config = TrainerConfig.from_dict(task.config)
         trainer_config.output_dir = str(settings.OUTPUT_DIR / task_id)
 
         trainer = Trainer_Qwen3(trainer_config)
         trainer.load_model_and_tokenizer()
 
+        # Attach callback to persist training progress when transformers callbacks are available
+        callbacks = None
+        try:
+            from transformers.trainer_callback import TrainerCallback
+        except ImportError:
+            logger.warning("transformers callbacks unavailable; training progress will not be persisted during execution.")
+        else:
+
+            class _DatabaseProgressCallback(TrainerCallback):
+                """Persist training progress information to the database."""
+
+                def __init__(self, session_factory, task_identifier: str):
+                    self._session_factory = session_factory
+                    self._task_identifier = task_identifier
+
+                def on_log(self, args, state, control, logs=None, **kwargs):  # noqa: D401
+                    if not logs:
+                        return
+
+                    session = self._session_factory()
+                    try:
+                        task_row = session.query(TrainingTask).filter(TrainingTask.id == self._task_identifier).first()
+                        if not task_row:
+                            return
+
+                        completed_steps = int(state.global_step or 0)
+                        if task_row.total_steps:
+                            completed_steps = min(completed_steps, task_row.total_steps)
+                        task_row.completed_steps = completed_steps
+
+                        if "loss" in logs:
+                            current_loss = float(logs["loss"])
+                            task_row.current_loss = current_loss
+                            if task_row.best_loss is None or current_loss < task_row.best_loss:
+                                task_row.best_loss = current_loss
+
+                        session.commit()
+                    except Exception as callback_error:  # pragma: no cover - defensive logging
+                        logger.warning(f"Failed to persist training progress for {self._task_identifier}: {callback_error}")
+                        session.rollback()
+                    finally:
+                        session.close()
+
+            callbacks = [_DatabaseProgressCallback(SessionLocal, task_id)]
+
         # Train
         logger.info("Starting model training...")
-        trainer.train(hf_dataset)
+        trainer.train(
+            hf_dataset,
+            callbacks=callbacks,
+        )
 
         # Save model
         trainer.save_model(trainer_config.output_dir)
@@ -86,6 +167,7 @@ async def run_training_task(task_id: str):
         task.status = "completed"
         task.completed_at = datetime.utcnow()
         task.output_dir = trainer_config.output_dir
+        task.completed_steps = task.total_steps
 
         db_session.commit()
 
@@ -159,6 +241,7 @@ async def start_training(
             completed_steps=task.completed_steps,
             current_loss=task.current_loss,
             best_loss=task.best_loss,
+            progress_percentage=_calculate_progress(task.completed_steps, task.total_steps),
             output_dir=task.output_dir,
             log_file=task.log_file
         )
@@ -193,6 +276,7 @@ async def get_training_status(
             completed_steps=task.completed_steps,
             current_loss=task.current_loss,
             best_loss=task.best_loss,
+            progress_percentage=_calculate_progress(task.completed_steps, task.total_steps),
             output_dir=task.output_dir,
             log_file=task.log_file
         )
@@ -234,8 +318,10 @@ async def list_training_tasks(
                     "total_steps": t.total_steps,
                     "completed_steps": t.completed_steps,
                     "current_loss": t.current_loss,
-                    "best_loss": t.best_loss
-                }
+                    "best_loss": t.best_loss,
+                    "percentage": _calculate_progress(t.completed_steps, t.total_steps),
+                },
+                "progress_percentage": _calculate_progress(t.completed_steps, t.total_steps),
             }
             for t in tasks
         ]
@@ -293,6 +379,7 @@ async def update_training_task(
             completed_steps=task.completed_steps,
             current_loss=task.current_loss,
             best_loss=task.best_loss,
+            progress_percentage=_calculate_progress(task.completed_steps, task.total_steps),
             output_dir=task.output_dir,
             log_file=task.log_file
         )

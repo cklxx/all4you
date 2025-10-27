@@ -7,8 +7,12 @@ import csv
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import pandas as pd
-from datasets import Dataset
 from loguru import logger
+
+try:  # Optional dependency, only required for dataset creation
+    from datasets import Dataset
+except ImportError:  # pragma: no cover - handled gracefully in runtime
+    Dataset = None
 
 class DataProcessor:
     """Process various data formats into training datasets"""
@@ -253,6 +257,11 @@ class DataProcessor:
         Returns:
             Hugging Face Dataset
         """
+        if Dataset is None:
+            raise ImportError(
+                "datasets library is required to create Hugging Face datasets. Install it with 'pip install datasets'."
+            )
+
         logger.info(f"Creating Hugging Face dataset with {len(data)} samples")
 
         if format_type == "alpaca":
