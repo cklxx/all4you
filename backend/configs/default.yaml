@@ -1,0 +1,56 @@
+# Default Training Configuration for Qwen3 Fine-tuning
+
+# Model Configuration
+model_name: "Qwen/Qwen3-7B-Instruct"
+model_type: "causal"
+
+# Training Method
+training_method: "lora"  # Options: sft, lora, qlora, dpo, grpo
+
+# Training Arguments
+num_train_epochs: 3
+per_device_train_batch_size: 4
+per_device_eval_batch_size: 4
+gradient_accumulation_steps: 4
+learning_rate: 2e-4
+max_grad_norm: 1.0
+warmup_ratio: 0.1
+weight_decay: 0.01
+
+# Optimizer and LR Scheduler
+optim: "paged_adamw_32bit"  # Options: adamw_torch, adamw_8bit, paged_adamw_32bit
+lr_scheduler_type: "cosine"  # Options: linear, cosine, constant
+max_steps: -1  # -1 means training until num_train_epochs
+
+# Data Configuration
+max_seq_length: 2048
+seed: 42
+
+# Model Quantization
+load_in_4bit: true
+load_in_8bit: false
+
+# LoRA Configuration
+lora_rank: 64
+lora_alpha: 128
+lora_dropout: 0.05
+lora_target_modules:
+  - "q_proj"
+  - "v_proj"
+
+# Logging and Checkpointing
+logging_steps: 10
+eval_steps: 100
+save_steps: 100
+evaluation_strategy: "no"  # Options: no, steps, epoch
+save_strategy: "steps"  # Options: steps, epoch
+save_total_limit: 3
+
+# Hardware Configuration
+use_flash_attention: true
+gradient_checkpointing: true
+fp16: false
+bf16: true  # Use bfloat16 for better numerical stability
+
+# Output Directory
+output_dir: "./outputs"
