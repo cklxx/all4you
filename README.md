@@ -2,6 +2,11 @@
 
 一个专业的 Qwen3 模型微调平台，包含完整的数据处理、训练管理和 Web 界面。
 
+> 📍 **项目路径**: `/Users/bytedance/code/learn/all4you`
+> 🌏 **国内优化**: 集成 ModelScope，下载速度提升 5-10 倍
+> 🚀 **推荐模型**: Qwen3-0.6B (快速实验) / Qwen3-4B (生产应用)
+> 📖 **详细文档**: [ModelScope 指南](MODELSCOPE_GUIDE.md) | [快速开始](QUICKSTART.md)
+
 ## 功能特性
 
 - ✨ **多种微调方法**: SFT、LoRA、QLoRA、DPO、GRPO
@@ -10,23 +15,24 @@
 - 🌐 **Web 界面**: 实时训练监控、模型管理、数据预览
 - 🎯 **开箱即用**: 预设多个训练配置模板
 - 📊 **完整日志**: 详细的训练日志和性能指标
+- 🇨🇳 **ModelScope**: 国内用户下载模型快 5-10 倍
+- 💽 **智能缓存**: 自动管理模型缓存，节省磁盘空间
 
 ## 项目结构
 
 ```
-qwen3-finetuner/
-├── backend/                 # 后端服务
-│   ├── api/                # API 路由
-│   ├── core/               # 核心逻辑
-│   ├── models/             # 数据模型
-│   ├── utils/              # 工具函数
-│   └── app.py              # FastAPI 应用
-├── frontend/               # 前端应用
-│   ├── src/               # Vue3 源代码
-│   └── public/            # 静态资源
-├── configs/               # 训练配置文件
-├── data/                  # 数据目录
-├── outputs/               # 输出目录（模型、日志）
+all4you/                    # 项目根目录
+├── backend/                # 后端服务
+│   ├── api/               # API 路由（数据、训练、模型、配置）
+│   ├── core/              # 核心逻辑（数据处理、训练引擎、模型管理）
+│   ├── models/            # 数据模型
+│   └── app.py             # FastAPI 应用
+├── frontend/              # Vue3 前端
+│   └── src/              # 源代码（页面、路由）
+├── examples/              # 示例数据
+├── MODELSCOPE_GUIDE.md    # ModelScope 完整指南
+├── QUICKSTART.md          # 快速开始指南
+├── setup.sh / setup.bat   # 一键安装脚本
 └── requirements.txt       # Python 依赖
 ```
 
