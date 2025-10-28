@@ -15,7 +15,7 @@ from loguru import logger
 
 from backend.core.data_processor import DataProcessor, validate_data_format
 from backend.core.dataset_hub import ModelScopeDatasetManager
-from backend.core.evaluator import AutoEvaluator
+from backend.core.evaluator import AutoEvaluator, OllamaJudgeUnavailable
 from backend.core.trainer import Trainer_Qwen3, TrainingConfig
 from backend.core.devices import DEVICE_CHOICES
 
@@ -28,12 +28,13 @@ PIPELINE_PRESETS: Dict[str, Dict[str, Any]] = {
     "search-intent-lora": {
         "description": (
             "下载魔搭搜索意图数据集，并在 Qwen/Qwen3-0.6B 上使用 LoRA 进行一键微调，"
-            "默认以 MPS 设备快速验证并复用 0.6B 评测模型。"
+            "默认以 MPS 设备快速验证，并优先调用 Ollama 8B 评测模型，缺失时回退至 0.6B。"
         ),
         "config": "backend/configs/qwen3-0.6b-mps.yaml",
         "device": "mps",
         "model": "Qwen/Qwen3-0.6B",
-        "judge_model": "Qwen/Qwen3-0.6B",
+        "judge_model": "ollama:qwen2:8b",
+        "fallback_judge_model": "Qwen/Qwen3-0.6B",
         "moda_dataset": "search_intent",
         "output_dir": "backend/outputs/search-intent-lora",
         "data_format": "alpaca",
@@ -205,6 +206,13 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         "--no-judge",
         action="store_true",
         help="Disable model-based automatic evaluation and only generate predictions.",
+    )
+    parser.add_argument(
+        "--fallback-judge-model",
+        default=None,
+        help=(
+            "Alternative judge model used when the primary judge is unavailable."
+        ),
     )
     parser.add_argument(
         "--moda-dataset",
@@ -490,7 +498,18 @@ def main() -> int:
     progress.complete("模型训练")
 
     eval_report = None
-    judge_model = None if args.no_judge or args.judge_model.lower() == "none" else args.judge_model
+
+    def _normalize_judge(name: Optional[str]) -> Optional[str]:
+        if not name:
+            return None
+        lowered = name.lower()
+        if lowered == "none":
+            return None
+        return name
+
+    requested_judge_model = None if args.no_judge else _normalize_judge(args.judge_model)
+    fallback_judge_model = _normalize_judge(getattr(args, "fallback_judge_model", None))
+    active_judge_model: Optional[str] = requested_judge_model
 
     judge_device = args.judge_device
     if judge_device == "inherit":
@@ -500,20 +519,51 @@ def main() -> int:
     log_section("自动评测")
     if eval_records:
         try:
-            evaluator = AutoEvaluator(
-                model_path=str(output_dir),
-                judge_model_name=judge_model,
-                max_new_tokens=args.max_new_tokens,
-                temperature=args.temperature,
-                top_p=args.top_p,
-                device=training_config.device,
-                judge_device=judge_device,
-            )
-            eval_report = evaluator.evaluate(
-                samples=eval_records,
-                format_type=args.data_format,
-                use_judge=bool(judge_model),
-            )
+            def run_evaluation(judge_name: Optional[str]) -> Dict[str, Any]:
+                evaluator = AutoEvaluator(
+                    model_path=str(output_dir),
+                    judge_model_name=judge_name,
+                    max_new_tokens=args.max_new_tokens,
+                    temperature=args.temperature,
+                    top_p=args.top_p,
+                    device=training_config.device,
+                    judge_device=judge_device,
+                )
+                report = evaluator.evaluate(
+                    samples=eval_records,
+                    format_type=args.data_format,
+                    use_judge=bool(judge_name),
+                )
+                return report
+
+            try:
+                eval_report = run_evaluation(active_judge_model)
+            except OllamaJudgeUnavailable as exc:
+                logger.warning(
+                    "Ollama 评测模型不可用（{}）。", exc
+                )
+                if fallback_judge_model:
+                    logger.info(
+                        "回退至评测模型 {}", fallback_judge_model
+                    )
+                    active_judge_model = fallback_judge_model
+                    eval_report = run_evaluation(active_judge_model)
+                else:
+                    logger.info("未配置回退评测模型，将仅生成预测结果。")
+                    active_judge_model = None
+                    eval_report = run_evaluation(None)
+
+            if eval_report is not None:
+                resolved_judge = eval_report.get("judge_model")
+                if resolved_judge is not None or active_judge_model is None:
+                    active_judge_model = resolved_judge
+                if active_judge_model is not None:
+                    eval_report.setdefault("active_judge_model", active_judge_model)
+                if fallback_judge_model:
+                    eval_report.setdefault("fallback_judge_model", fallback_judge_model)
+                if requested_judge_model:
+                    eval_report.setdefault("requested_judge_model", requested_judge_model)
+
             save_json(output_dir / "evaluation_report.json", eval_report)
             logger.info("Saved evaluation report to {}", output_dir / "evaluation_report.json")
         except Exception:  # pragma: no cover - runtime failure surfaced to user
@@ -523,6 +573,7 @@ def main() -> int:
         progress.complete("自动评测")
     else:
         logger.warning("No evaluation data provided; skipping automatic evaluation.")
+        active_judge_model = None
         progress.complete("自动评测")
 
     progress.start("结果汇总")
@@ -539,7 +590,10 @@ def main() -> int:
             "evaluation_data": {
                 "path": str(args.eval_data) if args.eval_data else None,
                 "num_samples": len(eval_records) if eval_records else 0,
-                "used_judge_model": bool(judge_model),
+                "used_judge_model": bool(active_judge_model),
+                "requested_judge_model": requested_judge_model,
+                "active_judge_model": active_judge_model,
+                "fallback_judge_model": fallback_judge_model,
             },
             "training": {
                 "config": training_config.to_dict(),

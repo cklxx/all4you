@@ -86,9 +86,9 @@ npm run dev
 
 > 🆕 想用命令行一站式完成数据处理、训练与评测？运行 `python scripts/pipeline.py --data your.json --eval-ratio 0.1`，即可生成训练集、触发微调并输出自动评测报告。
 >
-> ⚡️ 想要“零配置”体验搜索意图场景？执行 `python scripts/pipeline.py --preset search-intent-lora` 会自动从魔搭拉取搜索意图数据集，并在 Qwen/Qwen3-0.6B 上进行 MPS LoRA 训练与评测。
+> ⚡️ 想要“零配置”体验搜索意图场景？执行 `python scripts/pipeline.py --preset search-intent-lora` 会自动从魔搭拉取搜索意图数据集，在 Qwen/Qwen3-0.6B 上进行 MPS LoRA 训练，并优先使用本地 Ollama `qwen2:8b` 进行自动评测；若 Ollama 未安装则自动回退至 0.6B。
 >
-> 🖥️ 使用 `--device auto/cuda/mps/cpu` 控制训练设备，`--judge-device` 可单独指定评测模型所在设备。macOS 用户可以直接运行 `python scripts/pipeline.py --data your.json --config backend/configs/qwen3-0.6b-mps.yaml --device mps --judge-model Qwen/Qwen3-0.6B`，脚本会自动调整精度与量化设置以适配 MPS。
+> 🖥️ 使用 `--device auto/cuda/mps/cpu` 控制训练设备，`--judge-device` 可单独指定评测模型所在设备，`--fallback-judge-model` 则负责在主评测模型不可达时指定回退方案。macOS 用户可以直接运行 `python scripts/pipeline.py --data your.json --config backend/configs/qwen3-0.6b-mps.yaml --device mps --judge-model Qwen/Qwen3-0.6B`，脚本会自动调整精度与量化设置以适配 MPS。
 >
 > 📥 若数据托管在魔搭（ModelScope），可直接使用 `--moda-dataset content_understanding` 或 `--moda-dataset <dataset_id>` 自动下载、格式化并进入训练流程；如需仅下载，可执行 `./scripts/download_dataset.py --list` 查看预设并按需拉取。
 

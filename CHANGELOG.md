@@ -150,6 +150,7 @@ bitsandbytes==0.41.3  # 版本更新
 - 集成 `backend/core/dataset_hub.py` 与 `scripts/download_dataset.py`，支持从魔搭（ModelScope）一键拉取内容理解、搜索意图、Query 解析等数据集，并通过 `--moda-*` 参数直接接入训练流水线。
 - 新增 Apple Silicon (MPS) 友好的 `backend/configs/qwen3-0.6b-mps.yaml` 与管道参数，支持在 Mac 上使用 `--device mps` / `--judge-device` 进行 Qwen3-0.6B LoRA 训练与自动评测。
 - `scripts/pipeline.py` 新增 `--preset search-intent-lora`，可一键下载搜索意图数据并在 Qwen/Qwen3-0.6B 上执行 MPS LoRA 训练与评测。
+- `scripts/pipeline.py` 现默认在搜索意图预设中优先调用本地 Ollama `qwen2:8b` 评测模型，并提供 `--fallback-judge-model` 参数在主评测不可用时自动回退至 `Qwen/Qwen3-0.6B` 等备选方案。
 
 ### ♻️ 结构调整
 

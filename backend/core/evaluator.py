@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -46,6 +49,79 @@ class SampleEvaluation:
     judge_raw: Optional[str] = None
 
 
+class OllamaJudgeUnavailable(RuntimeError):
+    """Raised when an Ollama judge model cannot be reached."""
+
+
+class OllamaJudgeClient:
+    """Minimal HTTP client for interacting with a local Ollama server."""
+
+    def __init__(
+        self,
+        model_name: str,
+        *,
+        base_url: str = "http://127.0.0.1:11434",
+        health_timeout: float = 2.0,
+        request_timeout: float = 60.0,
+    ) -> None:
+        self.model_name = model_name
+        self.base_url = base_url.rstrip("/")
+        self.health_timeout = health_timeout
+        self.request_timeout = request_timeout
+
+    def _is_server_available(self) -> bool:
+        """Best-effort probe to check whether the Ollama server is reachable."""
+
+        if shutil.which("ollama") is None:
+            return False
+
+        try:
+            request = urllib.request.Request(
+                f"{self.base_url}/api/tags",
+                method="GET",
+            )
+            with urllib.request.urlopen(request, timeout=self.health_timeout) as response:  # type: ignore[arg-type]
+                return 200 <= response.status < 300
+        except Exception:  # pragma: no cover - environment dependent
+            return False
+
+    def ensure_available(self) -> None:
+        if not self._is_server_available():  # pragma: no cover - environment dependent
+            raise OllamaJudgeUnavailable(
+                "未检测到可用的 Ollama 服务，请确保已经安装并启动 Ollama。"
+            )
+
+    def generate(self, prompt: str) -> str:
+        payload = {
+            "model": self.model_name,
+            "prompt": prompt,
+            "stream": False,
+            "options": {"temperature": 0.0},
+        }
+        data = json.dumps(payload).encode("utf-8")
+        request = urllib.request.Request(
+            f"{self.base_url}/api/generate",
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.request_timeout) as response:  # type: ignore[arg-type]
+                body = response.read().decode("utf-8")
+        except urllib.error.URLError as exc:  # pragma: no cover - environment dependent
+            raise OllamaJudgeUnavailable(str(exc))
+
+        try:
+            parsed = json.loads(body)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"无法解析 Ollama 返回的内容: {exc}")
+
+        text = parsed.get("response")
+        if not isinstance(text, str):
+            raise RuntimeError("Ollama 响应缺少 'response' 字段或类型不正确。")
+        return text.strip()
+
+
 class AutoEvaluator:
     """Run automatic evaluations for fine-tuned models."""
 
@@ -74,6 +150,8 @@ class AutoEvaluator:
         self.tokenizer = None
         self.judge_model = None
         self.judge_tokenizer = None
+        self._ollama_judge: Optional[OllamaJudgeClient] = None
+        self.active_judge_model_name: Optional[str] = None
         self.target_dtype = coerce_torch_dtype(
             self.device,
             prefer_fp16=True,
@@ -122,6 +200,21 @@ class AutoEvaluator:
         if self.judge_model is not None and self.judge_tokenizer is not None:
             return
 
+        normalized = self.judge_model_name.strip()
+        if normalized.startswith("ollama:"):
+            ollama_model = normalized.split(":", 1)[1].strip()
+        elif normalized.startswith("ollama/"):
+            ollama_model = normalized.split("/", 1)[1].strip()
+        else:
+            ollama_model = None
+
+        if ollama_model:
+            self._ollama_judge = OllamaJudgeClient(ollama_model)
+            self._ollama_judge.ensure_available()
+            self.active_judge_model_name = f"ollama:{ollama_model}"
+            logger.info("Using Ollama judge model: {}", self.active_judge_model_name)
+            return
+
         logger.info("Loading judge model: {}", self.judge_model_name)
         self.judge_model, self.judge_tokenizer = self.model_manager.load_model_and_tokenizer(
             self.judge_model_name,
@@ -131,6 +224,7 @@ class AutoEvaluator:
             torch_dtype=self.judge_dtype,
         )
         self.judge_model.eval()
+        self.active_judge_model_name = self.judge_model_name
 
     @staticmethod
     def _extract_text(sample: Dict[str, Any], format_type: str) -> tuple[str, str, str]:
@@ -181,15 +275,36 @@ class AutoEvaluator:
         return prediction.strip()
 
     def _judge(self, evaluation: SampleEvaluation) -> None:
-        if self.judge_model is None or self.judge_tokenizer is None:
-            return
-
         prompt = JUDGE_PROMPT_TEMPLATE.format(
             instruction=evaluation.instruction,
             input=evaluation.input_text or "(none)",
             reference=evaluation.reference or "(none)",
             prediction=evaluation.prediction or "(empty)",
         )
+
+        if self._ollama_judge is not None:
+            raw_text = self._ollama_judge.generate(prompt)
+            evaluation.judge_raw = raw_text
+            match = re.search(r"\{.*\}", raw_text, flags=re.DOTALL)
+            candidate = match.group(0) if match else raw_text
+            try:
+                parsed = json.loads(candidate)
+                score = float(parsed.get("score")) if "score" in parsed else None
+                explanation = (
+                    str(parsed.get("explanation", "")).strip() if parsed else ""
+                )
+            except Exception:  # pragma: no cover - heuristic fallback
+                score_match = re.search(r"([1-5](?:\.\d+)?)", raw_text)
+                score = float(score_match.group(1)) if score_match else None
+                explanation = raw_text
+
+            evaluation.judge_score = score
+            evaluation.judge_explanation = explanation
+            return
+
+        if self.judge_model is None or self.judge_tokenizer is None:
+            return
+
         inputs = self.judge_tokenizer(prompt, return_tensors="pt")
         inputs = {k: v.to(self.judge_torch_device) for k, v in inputs.items()}
         with torch.inference_mode():
@@ -228,6 +343,7 @@ class AutoEvaluator:
 
         self._load_target_model()
         if use_judge:
+            self.active_judge_model_name = None
             self._load_judge_model()
 
         results: List[SampleEvaluation] = []
@@ -249,7 +365,7 @@ class AutoEvaluator:
                 prediction=prediction,
             )
 
-            if use_judge and self.judge_model is not None:
+            if use_judge and (self.judge_model is not None or self._ollama_judge is not None):
                 self._judge(result)
                 if result.judge_score is not None:
                     scores.append(result.judge_score)
@@ -260,7 +376,8 @@ class AutoEvaluator:
         report = {
             "total_samples": len(results),
             "average_judge_score": average_score,
-            "judge_model": self.judge_model_name if use_judge else None,
+            "judge_model": self.active_judge_model_name if use_judge else None,
+            "requested_judge_model": self.judge_model_name if use_judge else None,
             "results": [
                 {
                     "index": r.index,
@@ -278,4 +395,4 @@ class AutoEvaluator:
         return report
 
 
-__all__ = ["AutoEvaluator", "SampleEvaluation"]
+__all__ = ["AutoEvaluator", "OllamaJudgeUnavailable", "SampleEvaluation"]
