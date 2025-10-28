@@ -4,6 +4,7 @@ Integrates with Transformers, PEFT, and Unsloth for efficient training
 """
 
 import os
+import inspect
 from pathlib import Path
 from typing import Dict, Any, Optional, List, TYPE_CHECKING
 from dataclasses import dataclass, asdict
@@ -344,7 +345,7 @@ class Trainer_Qwen3:
         train_dataset = self.prepare_dataset(train_dataset)
 
         # Create training arguments
-        training_args = TrainingArguments(
+        training_arg_kwargs = dict(
             output_dir=self.config.output_dir,
             num_train_epochs=self.config.num_train_epochs,
             per_device_train_batch_size=self.config.per_device_train_batch_size,
@@ -361,14 +362,23 @@ class Trainer_Qwen3:
             save_steps=self.config.save_steps,
             save_strategy=self.config.save_strategy,
             save_total_limit=self.config.save_total_limit,
-            evaluation_strategy=self.config.evaluation_strategy,
-            eval_steps=self.config.eval_steps if eval_dataset else None,
             fp16=self.config.fp16 and self.device in ("cuda", "mps"),
             bf16=self.config.bf16 and self.device.startswith("cuda"),
             gradient_checkpointing=self.config.gradient_checkpointing,
             report_to=["tensorboard"],
             push_to_hub=False,
         )
+
+        training_args_signature = inspect.signature(TrainingArguments.__init__)
+        if "evaluation_strategy" in training_args_signature.parameters:
+            training_arg_kwargs["evaluation_strategy"] = self.config.evaluation_strategy
+        elif "eval_strategy" in training_args_signature.parameters:
+            training_arg_kwargs["eval_strategy"] = self.config.evaluation_strategy
+
+        if "eval_steps" in training_args_signature.parameters and eval_dataset:
+            training_arg_kwargs["eval_steps"] = self.config.eval_steps
+
+        training_args = TrainingArguments(**training_arg_kwargs)
 
         # Create trainer
         self.trainer = Trainer(
