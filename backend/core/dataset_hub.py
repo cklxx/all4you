@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -49,6 +50,85 @@ def _ensure_modelscope_available() -> None:
             "modelscope package is required but not installed. "
             "Install it with `pip install modelscope`."
         )
+
+
+def _patch_modelscope_dataset_formations(
+    *values: int, dataset_formations: Any = None
+) -> List[int]:
+    """Patch ModelScope's DatasetFormations enum for forward compatibility.
+
+    Some datasets published on ModelScope use newer ``DatasetFormations`` enum
+    values that older SDK versions (e.g. 1.11.0) do not recognise. When that
+    happens ``MsDataset.load`` raises ``ValueError`` with a message like
+    ``"4 is not a valid DatasetFormations"``.  Instead of forcing users to
+    upgrade the SDK, we opportunistically alias those unknown values to the
+    ``native`` formation which keeps the legacy behaviour intact.
+
+    Args:
+        *values: Optional explicit enum values to map. When empty, the function
+            will patch nothing and simply return ``[]``.
+        dataset_formations: Primarily for testing – allows injecting a mock enum
+            that mimics :class:`modelscope.utils.constant.DatasetFormations`.
+
+    Returns:
+        A list of the values that were actually patched.
+    """
+
+    if dataset_formations is None:  # pragma: no cover - exercised in runtime
+        try:
+            from modelscope.utils import constant as _constant  # type: ignore
+        except Exception:  # pragma: no cover - best effort guard
+            return []
+        dataset_formations = getattr(_constant, "DatasetFormations", None)
+
+    if dataset_formations is None:
+        return []
+
+    value_map = getattr(dataset_formations, "_value2member_map_", None)
+    fallback_member = getattr(dataset_formations, "native", None)
+
+    if not isinstance(value_map, dict) or fallback_member is None:
+        return []
+
+    patched: List[int] = []
+    for raw_value in values:
+        if not isinstance(raw_value, int):
+            continue
+        if raw_value in value_map:
+            continue
+        value_map[raw_value] = fallback_member
+        patched.append(raw_value)
+
+    if patched:
+        logger.warning(
+            "Detected unsupported ModelScope DatasetFormations values %s – "
+            "patched to fallback to 'native'. Consider upgrading modelscope "
+            "for full support.",
+            patched,
+        )
+
+    return patched
+
+
+def _maybe_patch_modelscope_dataset_formations(
+    exc: Exception, *, dataset_formations: Any = None
+) -> List[int]:
+    """Patch DatasetFormations enum based on the ``ValueError`` message."""
+
+    message = str(exc)
+    if "DatasetFormations" not in message:
+        return []
+
+    matches = re.findall(r"(\d+) is not a valid DatasetFormations", message)
+    values = [int(match) for match in matches]
+
+    if not values:
+        # No explicit value extracted; rely on caller to retry without changes.
+        return []
+
+    return _patch_modelscope_dataset_formations(
+        *values, dataset_formations=dataset_formations
+    )
 
 
 def _stringify(value: Any) -> str:
@@ -164,6 +244,20 @@ class ModelScopeDatasetManager:
     ) -> Tuple[List[Dict[str, Any]], Path]:
         _ensure_modelscope_available()
 
+        def _load_dataset_with_retry(**kwargs: Any):
+            while True:
+                try:
+                    return MsDataset.load(config.dataset_id, **kwargs)
+                except Exception as exc:
+                    patched = _maybe_patch_modelscope_dataset_formations(exc)
+                    if patched:
+                        logger.debug(
+                            "Retrying ModelScope download after patching "
+                            "DatasetFormations values %s", patched
+                        )
+                        continue
+                    raise
+
         logger.info(
             "Downloading ModelScope dataset '%s' (split=%s, subset=%s)",
             config.dataset_id,
@@ -174,15 +268,12 @@ class ModelScopeDatasetManager:
         # Load dataset with minimal parameters for better compatibility
         try:
             # Try with split parameter
-            dataset = MsDataset.load(
-                config.dataset_id,
-                split=config.split,
-            )
+            dataset = _load_dataset_with_retry(split=config.split)
         except Exception as e:
             logger.warning(f"Failed to load with split parameter: {e}")
             try:
                 # Fallback: try without any optional parameters
-                dataset = MsDataset.load(config.dataset_id)
+                dataset = _load_dataset_with_retry()
             except Exception as e2:
                 logger.error(f"Failed to load dataset: {e2}")
                 raise RuntimeError(
