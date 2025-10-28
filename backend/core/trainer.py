@@ -6,7 +6,7 @@ Integrates with Transformers, PEFT, and Unsloth for efficient training
 import os
 import inspect
 from pathlib import Path
-from typing import Dict, Any, Optional, List, TYPE_CHECKING
+from typing import Dict, Any, Optional, List, TYPE_CHECKING, Union, get_args, get_origin
 from dataclasses import dataclass, asdict
 import json
 from loguru import logger
@@ -125,7 +125,65 @@ class TrainingConfig:
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> "TrainingConfig":
         """Create config from dictionary"""
-        return cls(**{k: v for k, v in config_dict.items() if k in cls.__dataclass_fields__})
+        resolved: Dict[str, Any] = {}
+        for name, value in config_dict.items():
+            if name not in cls.__dataclass_fields__:
+                continue
+            field_info = cls.__dataclass_fields__[name]
+            resolved[name] = cls._coerce_field_value(field_info.type, value)
+        return cls(**resolved)
+
+    @staticmethod
+    def _coerce_field_value(expected_type: Any, value: Any) -> Any:
+        """Best-effort coercion of values loaded from YAML/JSON into the dataclass field type."""
+        if value is None:
+            return None
+
+        origin = get_origin(expected_type)
+        if origin is Union:
+            args = [arg for arg in get_args(expected_type) if arg is not type(None)]
+            if not args:
+                return None
+            for arg in args:
+                coerced = TrainingConfig._coerce_field_value(arg, value)
+                if coerced is not None:
+                    return coerced
+            return value
+        if origin in (list, List):
+            (inner_type,) = get_args(expected_type) or (Any,)
+            if isinstance(value, list):
+                return [TrainingConfig._coerce_field_value(inner_type, v) for v in value]
+            return [TrainingConfig._coerce_field_value(inner_type, value)]
+
+        if expected_type is float:
+            if isinstance(value, str):
+                try:
+                    return float(value)
+                except ValueError:
+                    return value
+            return float(value)
+
+        if expected_type is int:
+            if isinstance(value, str):
+                try:
+                    return int(float(value))
+                except ValueError:
+                    return value
+            return int(value)
+
+        if expected_type is bool:
+            if isinstance(value, str):
+                lowered = value.strip().lower()
+                if lowered in {"true", "1", "yes", "y"}:
+                    return True
+                if lowered in {"false", "0", "no", "n"}:
+                    return False
+            return bool(value)
+
+        if expected_type is str:
+            return str(value)
+
+        return value
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
@@ -343,6 +401,8 @@ class Trainer_Qwen3:
 
         # Prepare dataset
         train_dataset = self.prepare_dataset(train_dataset)
+        if eval_dataset is not None:
+            eval_dataset = self.prepare_dataset(eval_dataset)
 
         # Create training arguments
         training_arg_kwargs = dict(
@@ -441,6 +501,11 @@ class Trainer_Qwen3:
             if self.config.torch_dtype and self.config.torch_dtype.lower() != "float16":
                 logger.info("Overriding torch_dtype to float16 for MPS compatibility.")
                 self.config.torch_dtype = "float16"
+            if self.config.gradient_checkpointing:
+                logger.warning(
+                    "Gradient checkpointing is unstable on MPS; disabling to avoid autograd errors."
+                )
+                self.config.gradient_checkpointing = False
 
         if self.device == "cpu" and self.config.fp16:
             logger.warning("fp16 is not supported on CPU; reverting to full precision.")

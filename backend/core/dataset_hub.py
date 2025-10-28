@@ -9,6 +9,43 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from loguru import logger
 
+# Hugging Face Datasets dropped ``HubDatasetModuleFactoryWithoutScript`` in >=4.0.
+# Recent ModelScope releases still import the old symbol, so provide a shim.
+try:  # pragma: no cover - depends on optional datasets package
+    import datasets  # type: ignore
+    from datasets import load as _hf_load  # type: ignore
+
+    factory = getattr(_hf_load, "HubDatasetModuleFactory", None)
+    if factory is not None:
+        if not hasattr(_hf_load, "HubDatasetModuleFactoryWithoutScript"):
+            _hf_load.HubDatasetModuleFactoryWithoutScript = factory  # type: ignore[attr-defined]
+        if not hasattr(_hf_load, "HubDatasetModuleFactoryWithScript"):
+            _hf_load.HubDatasetModuleFactoryWithScript = factory  # type: ignore[attr-defined]
+    local_factory = getattr(_hf_load, "LocalDatasetModuleFactory", None)
+    if local_factory is not None:
+        if not hasattr(_hf_load, "LocalDatasetModuleFactoryWithoutScript"):
+            _hf_load.LocalDatasetModuleFactoryWithoutScript = local_factory  # type: ignore[attr-defined]
+        if not hasattr(_hf_load, "LocalDatasetModuleFactoryWithScript"):
+            _hf_load.LocalDatasetModuleFactoryWithScript = local_factory  # type: ignore[attr-defined]
+    # Datasets >=4 removed LargeList; older ModelScope expects it.
+    if not hasattr(datasets, "LargeList"):
+        try:
+            from datasets.features import Sequence as _Sequence  # type: ignore
+        except Exception:
+            _Sequence = None  # type: ignore
+        if _Sequence is not None:
+            datasets.LargeList = _Sequence  # type: ignore[attr-defined]
+
+    # Bridge renamed helpers in datasets.data_files
+    from datasets import data_files as _hf_data_files  # type: ignore
+
+    if not hasattr(_hf_data_files, "get_metadata_patterns") and hasattr(
+        _hf_data_files, "get_data_patterns"
+    ):
+        _hf_data_files.get_metadata_patterns = _hf_data_files.get_data_patterns  # type: ignore[attr-defined]
+except Exception:  # pragma: no cover - optional dependency
+    pass
+
 try:  # pragma: no cover - optional dependency
     from modelscope.msdatasets import MsDataset
     HAS_MODELSCOPE = True

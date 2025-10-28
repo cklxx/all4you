@@ -10,6 +10,7 @@ transformers>=4.36.2
 torch>=2.2.0  # Python 3.12 requires torch 2.2.0+
 accelerate>=0.25.0
 peft>=0.7.1
+tensorboard>=2.17.0  # Required for Transformer Trainer logging callbacks
 
 # Optimization
 # unsloth  # Optional: Install separately with: pip install "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git"
@@ -21,15 +22,15 @@ bitsandbytes>=0.42.0  # For quantization (updated for better Python 3.12 support
 # Data Processing
 pandas==2.1.3
 numpy==1.26.2
-datasets==2.15.0
+datasets>=2.19.0,<2.21
 
 # Model Hub (for China users)
-modelscope==1.11.0  # ModelScope support for faster model download in China
+modelscope>=1.16.0,<1.18  # ModelScope support for faster model download in China
 
 # Utilities
 python-dotenv==1.0.0
 pyyaml==6.0.1
-tqdm==4.66.1
+tqdm>=4.67.1
 loguru==0.7.2
 
 # Database/Cache

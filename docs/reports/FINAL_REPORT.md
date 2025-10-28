@@ -303,7 +303,7 @@ gradient_checkpointing: true
 
 **解决**:
 ```bash
-pip install modelscope==1.11.0
+pip install "modelscope>=1.16.0,<1.18"
 ```
 
 ### 2. 下载速度慢
