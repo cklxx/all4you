@@ -3,6 +3,8 @@ Model Manager with ModelScope support and caching
 Supports both Hugging Face Hub and ModelScope (魔搭)
 """
 
+from __future__ import annotations
+
 import os
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -16,6 +18,13 @@ except ImportError:
     logger.warning("ModelScope not installed, will use Hugging Face Hub only")
 
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from core.devices import (
+    resolve_device,
+    ensure_device_environment,
+    coerce_torch_dtype,
+    torch_device,
+)
 
 
 class ModelManager:
@@ -32,7 +41,6 @@ class ModelManager:
         "Qwen/Qwen3-3B": "Qwen/Qwen3-3B",
         "Qwen/Qwen3-4B": "Qwen/Qwen3-4B",
         "Qwen/Qwen3-7B": "Qwen/Qwen3-7B",
-        "Qwen/Qwen3-7B-Instruct": "Qwen/Qwen3-7B-Instruct",
         "Qwen/Qwen3-14B": "Qwen/Qwen3-14B",
         "Qwen/Qwen3-14B-Instruct": "Qwen/Qwen3-14B-Instruct",
     }
@@ -196,8 +204,10 @@ class ModelManager:
     def load_model_and_tokenizer(
         self,
         model_name: str,
-        device_map: str = "auto",
+        device_map: Optional[str] = "auto",
         trust_remote_code: bool = True,
+        device: Optional[str] = None,
+        torch_dtype: Optional["torch.dtype"] = None,
         **kwargs
     ) -> tuple:
         """
@@ -213,6 +223,11 @@ class ModelManager:
             Tuple of (model, tokenizer)
         """
         logger.info(f"Loading model: {model_name}")
+
+        resolved_device = resolve_device(device or device_map)
+        ensure_device_environment(resolved_device)
+        dtype = coerce_torch_dtype(resolved_device, explicit=torch_dtype)
+        torch_dev = torch_device(resolved_device)
 
         # Ensure model is cached
         model_path = self.ensure_model_cached(model_name)
@@ -230,13 +245,23 @@ class ModelManager:
             tokenizer.pad_token = tokenizer.eos_token
 
         # Load model
+        effective_device_map = device_map
+        if resolved_device in {"cpu", "mps"}:
+            effective_device_map = None
+
         model = AutoModelForCausalLM.from_pretrained(
             model_path,
-            device_map=device_map,
+            device_map=effective_device_map,
             trust_remote_code=trust_remote_code,
             token=token,
+            torch_dtype=dtype,
             **kwargs
         )
+
+        if effective_device_map is None:
+            model.to(torch_dev)
+        elif resolved_device.startswith("cuda"):
+            model.to(torch_dev)
 
         logger.info(f"Model loaded successfully from {model_path}")
         return model, tokenizer

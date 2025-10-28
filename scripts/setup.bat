@@ -1,4 +1,5 @@
 @echo off
+pushd %~dp0..
 echo.
 echo 🔧 Setting up Qwen3 Fine-tuner...
 echo.
@@ -62,7 +63,7 @@ if %ERRORLEVEL% EQU 0 (
     echo.
     echo Next steps:
     echo   1. Edit .env and add your Hugging Face token (optional^)
-    echo   2. Run 'start.bat' to start the application
+    echo   2. Run 'scripts\start.bat' to start the application
     echo   3. Visit http://localhost:8000/docs for API documentation
 ) else (
     echo.
@@ -71,3 +72,4 @@ if %ERRORLEVEL% EQU 0 (
 )
 
 pause
+popd

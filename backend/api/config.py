@@ -19,8 +19,8 @@ router = APIRouter()
 DEFAULT_CONFIGS = {
     "qwen3-lora-default": {
         "name": "Qwen3 LoRA Default",
-        "description": "Default LoRA configuration optimized for Qwen3",
-        "model_name": "Qwen/Qwen3-7B-Instruct",
+        "description": "Default LoRA configuration optimized for Qwen3-4B",
+        "model_name": "Qwen/Qwen3-4B",
         "training_method": "lora",
         "config": {
             "num_train_epochs": 3,
@@ -40,8 +40,8 @@ DEFAULT_CONFIGS = {
     },
     "qwen3-qlora-fast": {
         "name": "Qwen3 QLoRA Fast",
-        "description": "QLoRA configuration for fast training with minimal VRAM",
-        "model_name": "Qwen/Qwen3-14B-Instruct",
+        "description": "QLoRA configuration tuned for Qwen3-4B, balancing memory usage and training speed",
+        "model_name": "Qwen/Qwen3-4B",
         "training_method": "qlora",
         "config": {
             "num_train_epochs": 2,
@@ -61,8 +61,8 @@ DEFAULT_CONFIGS = {
     },
     "qwen3-sft-full": {
         "name": "Qwen3 SFT Full",
-        "description": "Full fine-tuning configuration for supervised fine-tuning",
-        "model_name": "Qwen/Qwen3-7B-Instruct",
+        "description": "Full fine-tuning configuration targeting the Qwen3-4B base model",
+        "model_name": "Qwen/Qwen3-4B",
         "training_method": "sft",
         "config": {
             "num_train_epochs": 3,
@@ -79,8 +79,8 @@ DEFAULT_CONFIGS = {
     },
     "qwen3-dpo-preference": {
         "name": "Qwen3 DPO Preference",
-        "description": "Direct Preference Optimization for alignment training",
-        "model_name": "Qwen/Qwen3-7B-Instruct",
+        "description": "Direct Preference Optimization preset for Qwen3-4B alignment training",
+        "model_name": "Qwen/Qwen3-4B",
         "training_method": "dpo",
         "config": {
             "num_train_epochs": 1,

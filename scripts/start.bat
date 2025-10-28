@@ -1,4 +1,5 @@
 @echo off
+pushd %~dp0..
 echo.
 echo 🚀 Starting Qwen3 Fine-tuner...
 echo.
@@ -60,3 +61,4 @@ if %ERRORLEVEL% EQU 0 (
 )
 
 pause
+popd

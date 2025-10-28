@@ -34,8 +34,10 @@ class TrainingConfigCreate(BaseModel):
     """Create training config request"""
     name: str = Field(..., description="Config name")
     description: Optional[str] = None
-    model_name: str = Field(default="Qwen/Qwen3-7B-Instruct")
+    model_name: str = Field(default="Qwen/Qwen3-4B")
     training_method: str = Field(default="lora", description="sft, lora, qlora, dpo, grpo")
+    device: str = Field(default="auto", description="Preferred device: auto/cuda/mps/cpu")
+    torch_dtype: Optional[str] = Field(default=None, description="Explicit torch dtype override, e.g. float16")
 
     # Training parameters
     num_train_epochs: int = Field(default=3)
@@ -59,8 +61,8 @@ class TrainingConfigCreate(BaseModel):
         json_schema_extra = {
             "example": {
                 "name": "Qwen3 LoRA Default",
-                "description": "Default LoRA configuration for Qwen3",
-                "model_name": "Qwen/Qwen3-7B-Instruct",
+                "description": "Default LoRA configuration for Qwen3-4B",
+                "model_name": "Qwen/Qwen3-4B",
                 "training_method": "lora",
                 "num_train_epochs": 3,
                 "per_device_train_batch_size": 4,

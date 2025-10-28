@@ -35,7 +35,7 @@
 | **Qwen3-0.6B** | 600M | ⭐⭐⭐⭐⭐ | 快速实验、原型开发 |
 | **Qwen3-4B** | 4B | ⭐⭐⭐⭐⭐ | 生产应用、最佳平衡 |
 | Qwen3-3B | 3B | ⭐⭐⭐ | 中等规模应用 |
-| Qwen3-7B/7B-Instruct | 7B | ⭐⭐⭐⭐ | 高性能需求 |
+| Qwen3-7B | 7B | ⭐⭐⭐⭐ | 高性能需求 |
 | Qwen3-14B/14B-Instruct | 14B | ⭐⭐⭐⭐ | 最佳性能 |
 
 #### ModelScope 集成
@@ -73,6 +73,7 @@ DELETE /api/models/cache/{name}   # 清除缓存
 - 数据统计分析
 - Web 界面预览
 - 格式转换支持
+- 魔搭（ModelScope）数据直连：支持通过 `scripts/pipeline.py --moda-dataset <name>` 直接下载内容理解、搜索意图、Query 解析等数据，并可使用 `scripts/download_dataset.py` 独立获取或自定义字段映射。
 
 ### 3. 训练方法
 
@@ -128,6 +129,7 @@ qwen3-finetuner/
 │   │   ├── config.py              # 配置管理
 │   │   ├── database.py            # 数据库定义
 │   │   ├── data_processor.py      # 数据处理
+│   │   ├── dataset_hub.py         # 魔搭数据源下载与字段映射 ⭐ NEW
 │   │   ├── trainer.py             # 训练引擎
 │   │   └── model_manager.py       # 模型管理 ⭐ NEW
 │   └── models/                     # 数据模型
@@ -148,11 +150,15 @@ qwen3-finetuner/
 │   ├── docs/integrations/modelscope.md        # ModelScope 指南 ⭐ NEW
 │   └── PROJECT_SUMMARY.md         # 项目总结
 ├── scripts/
-│   ├── setup.sh                   # Linux/Mac 安装
-│   ├── setup.bat                  # Windows 安装
-│   ├── start.sh                   # 启动脚本
-│   ├── start.bat                  # Windows 启动
-│   └── test_imports.py            # 导入测试
+│   ├── deploy.sh                     # 零依赖一键部署（Linux/Mac）
+│   ├── deploy.bat                    # 零依赖一键部署（Windows）
+│   ├── dev.sh                        # 开发环境启动
+│   ├── setup.sh                      # Linux/Mac 安装
+│   ├── setup.bat                     # Windows 安装
+│   ├── start.sh                      # 手动启动脚本
+│   ├── start.bat                     # Windows 启动脚本
+│   └── download_dataset.py           # 魔搭数据集下载 CLI ⭐ NEW
+├── test_imports.py            # 导入测试
 ├── requirements.txt               # Python 依赖
 └── .env.example                   # 环境变量模板
 ```
@@ -165,10 +171,10 @@ qwen3-finetuner/
 
 ```bash
 # 1. 一键安装
-./setup.sh  # 或 setup.bat (Windows)
+./scripts/setup.sh  # 或 scripts/setup.bat (Windows)
 
 # 2. 启动服务
-./start.sh  # 或 start.bat (Windows)
+./scripts/start.sh  # 或 scripts/start.bat (Windows)
 
 # 3. 打开浏览器
 open http://localhost:5173
@@ -252,7 +258,7 @@ USE_MODELSCOPE=True          # 国内用户设为 True
 MODEL_CACHE_DIR=             # 留空使用默认缓存
 
 # 默认模型
-DEFAULT_MODEL=Qwen/Qwen3-0.6B
+DEFAULT_MODEL=Qwen/Qwen3-4B
 
 # Hugging Face Token（可选）
 HF_TOKEN=your_token_here
@@ -266,8 +272,8 @@ DEFAULT_NUM_EPOCHS=3
 ### 训练配置 (YAML)
 
 ```yaml
-# 推荐配置 - Qwen3-0.6B + LoRA
-model_name: Qwen/Qwen3-0.6B
+# 推荐配置 - Qwen3-4B + LoRA
+model_name: Qwen/Qwen3-4B
 training_method: lora
 
 num_train_epochs: 3
@@ -279,6 +285,8 @@ max_seq_length: 2048
 lora_rank: 64
 lora_alpha: 128
 lora_dropout: 0.05
+
+# 快速验证：如需更快迭代可切换为 Qwen/Qwen3-0.6B
 
 load_in_4bit: true
 use_flash_attention: true
@@ -321,7 +329,7 @@ USE_MODELSCOPE=True
 curl http://localhost:8000/api/models/cache/list
 
 # 清除不用的模型
-curl -X DELETE http://localhost:8000/api/models/cache/Qwen_Qwen3-7B
+curl -X DELETE http://localhost:8000/api/models/cache/Qwen_Qwen3-4B
 
 # 或清空所有缓存
 curl -X DELETE http://localhost:8000/api/models/cache/all
@@ -516,7 +524,7 @@ for model in manager.list_cached_models():
 ## 🎯 使用建议
 
 ### 新手用户
-1. 使用 `setup.sh` 一键安装
+1. 使用 `scripts/setup.sh` 一键安装
 2. 从 0.6B 模型开始
 3. 使用示例数据测试
 4. 查看 Web 界面演示
