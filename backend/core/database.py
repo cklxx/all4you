@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, Column, String, DateTime, Integer, Float, 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from datetime import datetime
-from core.config import Settings
+from .config import Settings
 
 settings = Settings()
 

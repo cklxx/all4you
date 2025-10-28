@@ -15,8 +15,8 @@ import torch
 from loguru import logger
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from core.model_manager import get_model_manager
-from core.devices import (
+from .model_manager import get_model_manager
+from .devices import (
     resolve_device,
     ensure_device_environment,
     coerce_torch_dtype,

@@ -10,10 +10,10 @@ from loguru import logger
 
 try:  # pragma: no cover - optional dependency
     from modelscope.msdatasets import MsDataset
-    from modelscope.utils.import_utils import is_modelscope_available
+    HAS_MODELSCOPE = True
 except ImportError:  # pragma: no cover - handled at runtime
     MsDataset = None  # type: ignore
-    is_modelscope_available = lambda: False  # type: ignore
+    HAS_MODELSCOPE = False
 
 
 @dataclass(frozen=True)
@@ -44,7 +44,7 @@ class ModelScopeDatasetConfig:
 
 
 def _ensure_modelscope_available() -> None:
-    if MsDataset is None or not is_modelscope_available():  # pragma: no cover - runtime guard
+    if not HAS_MODELSCOPE or MsDataset is None:  # pragma: no cover - runtime guard
         raise RuntimeError(
             "modelscope package is required but not installed. "
             "Install it with `pip install modelscope`."
@@ -90,41 +90,38 @@ class ModelScopeDatasetManager:
     """Download and adapt datasets hosted on ModelScope."""
 
     PRESET_DATASETS: Dict[str, ModelScopeDatasetConfig] = {
-        "content_understanding": ModelScopeDatasetConfig(
-            name="content_understanding",
-            dataset_id="iic/nlp_content_understanding",
+        "alpaca_zh": ModelScopeDatasetConfig(
+            name="alpaca_zh",
+            dataset_id="AI-ModelScope/alpaca-gpt4-data-zh",
             split="train",
             fields={
                 "instruction": "instruction",
-                "input": "query",
-                "output": "answer",
+                "input": "input",
+                "output": "output",
             },
-            description=(
-                "面向内容理解的问答数据集，包含查询(query)与回答(answer)，"
-                "可直接用于指令微调场景。"
-            ),
+            description="中文 Alpaca 数据集，GPT-4 生成的高质量指令数据",
         ),
-        "search_intent": ModelScopeDatasetConfig(
-            name="search_intent",
-            dataset_id="iic/nlp_search_intent",
+        "firefly": ModelScopeDatasetConfig(
+            name="firefly",
+            dataset_id="wyj123456/firefly-train-1.1M",
             split="train",
             fields={
-                "instruction": "请判断搜索意图并给出分类结果：{query}",
+                "instruction": "{input}",
                 "input": "",
-                "output": "intent",
+                "output": "target",
             },
-            description="搜索意图分类任务，输出 intent 标签。",
+            description="Firefly 中文对话数据集，包含 110 万条数据",
         ),
-        "query_parsing": ModelScopeDatasetConfig(
-            name="query_parsing",
-            dataset_id="iic/nlp_query_parsing",
+        "belle": ModelScopeDatasetConfig(
+            name="belle",
+            dataset_id="AI-ModelScope/train_0.5M_CN",
             split="train",
             fields={
-                "instruction": "请解析搜索Query并抽取关键信息：{query}",
-                "input": "",
-                "output": "parsed_query",
+                "instruction": "instruction",
+                "input": "input",
+                "output": "output",
             },
-            description="Query 解析任务，包含查询与结构化解析结果。",
+            description="BELLE 中文指令数据集 50 万条",
         ),
     }
 
@@ -174,12 +171,15 @@ class ModelScopeDatasetManager:
             config.subset,
         )
 
-        dataset = MsDataset.load(
-            config.dataset_id,
-            split=config.split,
-            subset_name=config.subset,
-            download_mode="reuse_cache_if_exists",
-        )
+        # Load dataset without specifying split initially (will filter later if needed)
+        try:
+            dataset = MsDataset.load(
+                config.dataset_id,
+                subset_name=config.subset if config.subset else None,
+            )
+        except Exception:
+            # Fallback: try without subset_name
+            dataset = MsDataset.load(config.dataset_id)
         records: List[Dict[str, Any]] = []
         for idx, sample in enumerate(dataset):
             if limit is not None and idx >= limit:

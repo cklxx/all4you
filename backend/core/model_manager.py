@@ -19,7 +19,7 @@ except ImportError:
 
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from core.devices import (
+from .devices import (
     resolve_device,
     ensure_device_environment,
     coerce_torch_dtype,

@@ -42,8 +42,8 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 else:
     Dataset = Any
 
-from core.model_manager import get_model_manager
-from core.devices import (
+from .model_manager import get_model_manager
+from .devices import (
     resolve_device,
     ensure_device_environment,
     coerce_torch_dtype,

@@ -29,9 +29,9 @@ SUBSECTION_DIVIDER = "-" * 80
 
 
 PIPELINE_PRESETS: Dict[str, Dict[str, Any]] = {
-    "search-intent-lora": {
+    "alpaca-zh-lora": {
         "description": (
-            "下载魔搭搜索意图数据集，并在 Qwen/Qwen3-0.6B 上使用 LoRA 进行一键微调，"
+            "下载魔搭中文 Alpaca 数据集，并在 Qwen/Qwen3-0.6B 上使用 LoRA 进行一键微调，"
             "默认以 MPS 设备快速验证，并优先调用 Ollama 8B 评测模型，缺失时回退至 0.6B。"
         ),
         "config": "backend/configs/qwen3-0.6b-mps.yaml",
@@ -39,8 +39,21 @@ PIPELINE_PRESETS: Dict[str, Dict[str, Any]] = {
         "model": "Qwen/Qwen3-0.6B",
         "judge_model": "ollama:qwen2:8b",
         "fallback_judge_model": "Qwen/Qwen3-0.6B",
-        "moda_dataset": "search_intent",
-        "output_dir": "backend/outputs/search-intent-lora",
+        "moda_dataset": "alpaca_zh",
+        "output_dir": "backend/outputs/alpaca-zh-lora",
+        "data_format": "alpaca",
+        "eval_ratio": 0.1,
+    },
+    # 保留旧名称作为别名
+    "search-intent-lora": {
+        "description": "(已更新) 使用中文 Alpaca 数据集进行 LoRA 微调",
+        "config": "backend/configs/qwen3-0.6b-mps.yaml",
+        "device": "mps",
+        "model": "Qwen/Qwen3-0.6B",
+        "judge_model": "ollama:qwen2:8b",
+        "fallback_judge_model": "Qwen/Qwen3-0.6B",
+        "moda_dataset": "alpaca_zh",
+        "output_dir": "backend/outputs/alpaca-zh-lora",
         "data_format": "alpaca",
         "eval_ratio": 0.1,
     },
