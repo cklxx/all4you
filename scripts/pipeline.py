@@ -6,9 +6,9 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from datetime import datetime
 
 import yaml
 from loguru import logger
@@ -18,6 +18,10 @@ from backend.core.dataset_hub import ModelScopeDatasetManager
 from backend.core.evaluator import AutoEvaluator
 from backend.core.trainer import Trainer_Qwen3, TrainingConfig
 from backend.core.devices import DEVICE_CHOICES
+
+
+SECTION_DIVIDER = "=" * 80
+SUBSECTION_DIVIDER = "-" * 80
 
 
 PIPELINE_PRESETS: Dict[str, Dict[str, Any]] = {
@@ -36,6 +40,58 @@ PIPELINE_PRESETS: Dict[str, Dict[str, Any]] = {
         "eval_ratio": 0.1,
     },
 }
+
+
+class PipelineProgress:
+    """Simple progress tracker that emits stage updates to the logger."""
+
+    STATUS_SYMBOLS = {
+        "pending": "…",
+        "running": "▶",
+        "completed": "✓",
+        "failed": "✗",
+    }
+
+    def __init__(self, stages: List[str]):
+        self._stages = stages
+        self._status = {name: "pending" for name in stages}
+        self._current: Optional[str] = None
+        self._render(initial=True)
+
+    def start(self, stage: str) -> None:
+        self._set_status(stage, "running")
+        self._current = stage
+
+    def complete(self, stage: str) -> None:
+        self._set_status(stage, "completed")
+        if self._current == stage:
+            self._current = None
+
+    def fail(self, stage: str) -> None:
+        self._set_status(stage, "failed")
+        if self._current == stage:
+            self._current = None
+
+    def _set_status(self, stage: str, status: str) -> None:
+        if stage not in self._status:
+            raise ValueError(f"Unknown stage '{stage}'")
+        self._status[stage] = status
+        self._render()
+
+    def _render(self, *, initial: bool = False) -> None:
+        total = len(self._stages)
+        completed = sum(1 for status in self._status.values() if status == "completed")
+        header = f"进度 {completed}/{total}"
+        lines = [header]
+        for idx, stage in enumerate(self._stages, start=1):
+            status = self._status[stage]
+            symbol = self.STATUS_SYMBOLS.get(status, "?")
+            lines.append(f"  [{idx:02d}] {symbol} {stage}")
+        message = "\n".join(lines)
+        if initial:
+            logger.info("\n{}\n{}", SECTION_DIVIDER, message)
+        else:
+            logger.info("\n{}\n{}\n{}", SUBSECTION_DIVIDER, message, SUBSECTION_DIVIDER)
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -283,23 +339,49 @@ def load_training_config(path: str, overrides: Dict[str, Any]) -> TrainingConfig
 
 
 
+def log_section(title: str) -> None:
+    logger.info("\n{}\n{}\n{}", SECTION_DIVIDER, title, SECTION_DIVIDER)
+
+
+def log_subsection(title: str) -> None:
+    logger.info("\n{}\n{}\n{}", SUBSECTION_DIVIDER, title, SUBSECTION_DIVIDER)
+
+
 def main() -> int:
-    args = parse_args()
     logger.remove()
     logger.add(sys.stderr, level="INFO")
 
+    progress = PipelineProgress(
+        [
+            "解析参数",
+            "准备数据集",
+            "数据预处理",
+            "模型训练",
+            "自动评测",
+            "结果汇总",
+        ]
+    )
+
+    progress.start("解析参数")
+    log_section("解析参数")
+    args = parse_args()
+
     if args.preset:
         logger.info("Using pipeline preset '%s'", args.preset)
-
-    dataset_info: Optional[Dict[str, Any]] = None
 
     field_mapping: Dict[str, str] = {}
     try:
         field_mapping = parse_field_mapping(args.moda_fields)
     except ValueError as exc:
+        progress.fail("解析参数")
         logger.error(str(exc))
         return 1
+    progress.complete("解析参数")
 
+    dataset_info: Optional[Dict[str, Any]] = None
+
+    progress.start("准备数据集")
+    log_section("准备数据集")
     if args.moda_dataset:
         manager = ModelScopeDatasetManager(cache_dir=args.moda_cache_dir)
         try:
@@ -311,26 +393,33 @@ def main() -> int:
                 limit=args.moda_limit,
             )
         except Exception as exc:  # pragma: no cover - external dependency call
+            progress.fail("准备数据集")
             logger.error("Failed to download ModelScope dataset: {}", exc)
             return 1
         if not dataset_info["data_path"]:
+            progress.fail("准备数据集")
             logger.error("ModelScope dataset download did not produce a usable file.")
             return 1
         data_path = Path(dataset_info["data_path"])
         logger.info("Using ModelScope dataset located at %s", data_path)
     else:
         if not args.data:
+            progress.fail("准备数据集")
             logger.error("Either --data or --moda-dataset must be provided.")
             return 1
         data_path = Path(args.data)
 
     if not data_path.exists():
+        progress.fail("准备数据集")
         logger.error("Training data file not found: {}", data_path)
         return 1
+    progress.complete("准备数据集")
 
     output_dir = Path(args.output_dir)
     ensure_output_dir(output_dir)
 
+    progress.start("数据预处理")
+    log_section("数据预处理")
     training_info = process_dataset(
         path=str(data_path),
         format_type=args.data_format,
@@ -346,6 +435,7 @@ def main() -> int:
     if args.eval_data:
         eval_path = Path(args.eval_data)
         if not eval_path.exists():
+            progress.fail("数据预处理")
             logger.error("Evaluation data file not found: {}", eval_path)
             return 1
         eval_info = process_dataset(
@@ -358,6 +448,7 @@ def main() -> int:
         eval_records = eval_info["records"]
         eval_dataset = eval_info["dataset"]
     else:
+        log_subsection("拆分训练与评估集")
         train_records, eval_records = split_train_eval(train_records, args.eval_ratio)
         if eval_records:
             eval_dataset = DataProcessor.create_huggingface_dataset(eval_records, format_type=args.data_format)
@@ -368,13 +459,17 @@ def main() -> int:
 
     train_dataset = training_info["dataset"]
     if len(train_dataset) == 0:
+        progress.fail("数据预处理")
         logger.error("No samples available for training after preprocessing.")
         return 1
+    progress.complete("数据预处理")
 
     overrides = {"output_dir": str(output_dir), "device": args.device}
     if args.model:
         overrides["model_name"] = args.model
 
+    log_section("加载与训练模型")
+    progress.start("模型训练")
     training_config = load_training_config(args.config, overrides)
 
     if args.device == "mps" and not args.model and training_config.model_name != "Qwen/Qwen3-0.6B":
@@ -383,10 +478,16 @@ def main() -> int:
         )
         training_config.model_name = "Qwen/Qwen3-0.6B"
 
-    trainer = Trainer_Qwen3(training_config)
-    trainer.load_model_and_tokenizer()
-    trainer.train(train_dataset=train_dataset, eval_dataset=eval_dataset)
-    trainer.save_model(str(output_dir))
+    try:
+        trainer = Trainer_Qwen3(training_config)
+        trainer.load_model_and_tokenizer()
+        trainer.train(train_dataset=train_dataset, eval_dataset=eval_dataset)
+        trainer.save_model(str(output_dir))
+    except Exception:  # pragma: no cover - runtime failure surfaced to user
+        progress.fail("模型训练")
+        logger.exception("模型训练阶段出现异常，请检查上述日志。")
+        return 1
+    progress.complete("模型训练")
 
     eval_report = None
     judge_model = None if args.no_judge or args.judge_model.lower() == "none" else args.judge_model
@@ -395,63 +496,80 @@ def main() -> int:
     if judge_device == "inherit":
         judge_device = args.device
 
+    progress.start("自动评测")
+    log_section("自动评测")
     if eval_records:
-        evaluator = AutoEvaluator(
-            model_path=str(output_dir),
-            judge_model_name=judge_model,
-            max_new_tokens=args.max_new_tokens,
-            temperature=args.temperature,
-            top_p=args.top_p,
-            device=training_config.device,
-            judge_device=judge_device,
-        )
-        eval_report = evaluator.evaluate(
-            samples=eval_records,
-            format_type=args.data_format,
-            use_judge=bool(judge_model),
-        )
-        save_json(output_dir / "evaluation_report.json", eval_report)
-        logger.info("Saved evaluation report to {}", output_dir / "evaluation_report.json")
+        try:
+            evaluator = AutoEvaluator(
+                model_path=str(output_dir),
+                judge_model_name=judge_model,
+                max_new_tokens=args.max_new_tokens,
+                temperature=args.temperature,
+                top_p=args.top_p,
+                device=training_config.device,
+                judge_device=judge_device,
+            )
+            eval_report = evaluator.evaluate(
+                samples=eval_records,
+                format_type=args.data_format,
+                use_judge=bool(judge_model),
+            )
+            save_json(output_dir / "evaluation_report.json", eval_report)
+            logger.info("Saved evaluation report to {}", output_dir / "evaluation_report.json")
+        except Exception:  # pragma: no cover - runtime failure surfaced to user
+            progress.fail("自动评测")
+            logger.exception("自动评测阶段出现异常，请检查上述日志。")
+            return 1
+        progress.complete("自动评测")
     else:
         logger.warning("No evaluation data provided; skipping automatic evaluation.")
+        progress.complete("自动评测")
 
-    pipeline_summary = {
-        "preset": args.preset,
-        "training_data": {
-            "path": str(data_path),
-            "processed_snapshot": training_info["snapshot"],
-            "num_samples": len(train_records),
-        },
-        "modelscope": None,
-        "evaluation_data": {
-            "path": str(args.eval_data) if args.eval_data else None,
-            "num_samples": len(eval_records) if eval_records else 0,
-            "used_judge_model": bool(judge_model),
-        },
-        "training": {
-            "config": training_config.to_dict(),
-            "output_dir": str(output_dir),
-        },
-        "evaluation": eval_report,
-    }
-
-    if dataset_info:
-        pipeline_summary["modelscope"] = {
-            "requested": args.moda_dataset,
-            "dataset_id": dataset_info["config"].dataset_id,
-            "split": dataset_info["config"].split,
-            "subset": dataset_info["config"].subset,
-            "raw_path": dataset_info["raw_path"],
-            "formatted_path": dataset_info.get("formatted_path"),
-            "field_mapping": dataset_info["config"].fields,
-            "limit": args.moda_limit,
+    progress.start("结果汇总")
+    log_section("结果汇总")
+    try:
+        pipeline_summary = {
+            "preset": args.preset,
+            "training_data": {
+                "path": str(data_path),
+                "processed_snapshot": training_info["snapshot"],
+                "num_samples": len(train_records),
+            },
+            "modelscope": None,
+            "evaluation_data": {
+                "path": str(args.eval_data) if args.eval_data else None,
+                "num_samples": len(eval_records) if eval_records else 0,
+                "used_judge_model": bool(judge_model),
+            },
+            "training": {
+                "config": training_config.to_dict(),
+                "output_dir": str(output_dir),
+            },
+            "evaluation": eval_report,
         }
-    else:
-        pipeline_summary.pop("modelscope")
-    save_json(output_dir / "pipeline_summary.json", pipeline_summary)
-    logger.info(
-        "Pipeline completed successfully. Summary saved to {}", output_dir / "pipeline_summary.json"
-    )
+
+        if dataset_info:
+            pipeline_summary["modelscope"] = {
+                "requested": args.moda_dataset,
+                "dataset_id": dataset_info["config"].dataset_id,
+                "split": dataset_info["config"].split,
+                "subset": dataset_info["config"].subset,
+                "raw_path": dataset_info["raw_path"],
+                "formatted_path": dataset_info.get("formatted_path"),
+                "field_mapping": dataset_info["config"].fields,
+                "limit": args.moda_limit,
+            }
+        else:
+            pipeline_summary.pop("modelscope")
+        save_json(output_dir / "pipeline_summary.json", pipeline_summary)
+        logger.info(
+            "Pipeline completed successfully. Summary saved to {}", output_dir / "pipeline_summary.json"
+        )
+    except Exception:  # pragma: no cover - runtime failure surfaced to user
+        progress.fail("结果汇总")
+        logger.exception("结果汇总阶段出现异常，请检查上述日志。")
+        return 1
+    progress.complete("结果汇总")
     return 0
 
 
