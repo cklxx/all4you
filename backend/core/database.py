@@ -68,7 +68,7 @@ class DataFile(Base):
     # Metadata
     total_samples = Column(Integer, default=0)
     file_size = Column(Integer)  # in bytes
-    metadata = Column(JSON)
+    metadata_json = Column("metadata", JSON)
 
 
 class TrainingConfig(Base):

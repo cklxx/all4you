@@ -34,8 +34,10 @@
         <el-table-column label="Progress" width="200">
           <template #default="{ row }">
             <div v-if="row.progress">
-              <el-progress :percentage="row.progress.progress || 0" />
-              <span style="font-size: 12px">{{ row.progress.completed_steps }} / {{ row.progress.total_steps }}</span>
+              <el-progress :percentage="row.progress.percentage || 0" />
+              <span style="font-size: 12px">
+                {{ row.progress.completed_steps }} / {{ row.progress.total_steps }}
+              </span>
             </div>
           </template>
         </el-table-column>
@@ -114,8 +116,12 @@
           <el-descriptions-item label="Best Loss">{{ selectedTask.best_loss?.toFixed(4) || 'N/A' }}</el-descriptions-item>
         </el-descriptions>
 
-        <div v-if="selectedTask.status === 'running'" style="margin-top: 20px">
-          <el-progress :percentage="Math.round((selectedTask.completed_steps / selectedTask.total_steps) * 100)" />
+        <div v-if="selectedTask.progress" class="task-progress">
+          <el-progress :percentage="detailsProgress" />
+          <p class="task-progress__summary">
+            {{ selectedTask.progress?.completed_steps || selectedTask.completed_steps }} /
+            {{ selectedTask.progress?.total_steps || selectedTask.total_steps }}
+          </p>
         </div>
       </div>
     </el-dialog>
@@ -123,7 +129,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 
@@ -138,6 +144,39 @@ const newTaskForm = ref({
   data_file_id: '',
   config_id: ''
 })
+let refreshTimer = null
+
+const calculatePercentage = (completedSteps = 0, totalSteps = 0) => {
+  if (!totalSteps || totalSteps <= 0) {
+    return 0
+  }
+
+  return Math.min(100, Math.max(0, Math.round((completedSteps / totalSteps) * 100)))
+}
+
+const normalizeTask = task => {
+  if (!task) {
+    return null
+  }
+
+  const progress = task.progress || {}
+  const totalSteps = progress.total_steps ?? task.total_steps ?? 0
+  const completedSteps = progress.completed_steps ?? task.completed_steps ?? 0
+  const percentage =
+    task.progress_percentage ?? progress.percentage ?? calculatePercentage(completedSteps, totalSteps)
+
+  return {
+    ...task,
+    progress: {
+      total_steps: totalSteps,
+      completed_steps: completedSteps,
+      current_loss: progress.current_loss ?? task.current_loss ?? null,
+      best_loss: progress.best_loss ?? task.best_loss ?? null,
+      percentage
+    },
+    progress_percentage: percentage
+  }
+}
 
 onMounted(() => {
   loadTrainingTasks()
@@ -145,17 +184,25 @@ onMounted(() => {
   loadConfigs()
 
   // 定期刷新任务状态
-  setInterval(() => {
+  refreshTimer = setInterval(() => {
     loadTrainingTasks()
   }, 5000)
+})
+
+onBeforeUnmount(() => {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
 })
 
 const loadTrainingTasks = async () => {
   try {
     const response = await axios.get('/api/train/list')
-    trainingTasks.value = response.data.data?.tasks || []
+    const tasks = response.data.data?.tasks || []
+    trainingTasks.value = tasks.map(normalizeTask).filter(Boolean)
   } catch (error) {
-    console.error('Failed to load training tasks')
+    console.error('Failed to load training tasks', error)
   }
 }
 
@@ -206,7 +253,11 @@ const startTraining = async () => {
 const viewDetails = async (task) => {
   try {
     const response = await axios.get(`/api/train/status/${task.id}`)
-    selectedTask.value = response.data
+    const normalized = normalizeTask(response.data)
+    if (!normalized) {
+      throw new Error('Invalid task response')
+    }
+    selectedTask.value = normalized
     detailsVisible.value = true
   } catch (error) {
     ElMessage.error('Failed to load task details')
@@ -230,6 +281,14 @@ const deleteTask = (task) => {
     })
     .catch(() => {})
 }
+
+const detailsProgress = computed(() => {
+  if (!selectedTask.value) {
+    return 0
+  }
+
+  return selectedTask.value.progress?.percentage ?? 0
+})
 </script>
 
 <style scoped>
@@ -241,5 +300,15 @@ const deleteTask = (task) => {
 
 .task-details {
   padding: 20px;
+}
+
+.task-progress {
+  margin-top: 20px;
+}
+
+.task-progress__summary {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #606266;
 }
 </style>

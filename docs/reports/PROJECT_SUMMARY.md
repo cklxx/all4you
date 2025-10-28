@@ -138,7 +138,7 @@
 ### 5. 文档
 
 - `README.md` - 项目总体说明
-- `QUICKSTART.md` - 详细快速开始指南
+- [快速上手指南](../getting-started.md) - 详细快速开始指南
 - `PROJECT_SUMMARY.md` - 本文档
 
 ## 🎯 核心功能特性
@@ -354,7 +354,7 @@ start.bat
 ## 📞 支持和反馈
 
 - 查看 README.md 了解详细说明
-- 查看 QUICKSTART.md 获取使用指南
+- 查看 [快速上手指南](../getting-started.md) 获取使用指南
 - 查看 API 文档了解 API 细节
 - 查看示例数据了解数据格式
 

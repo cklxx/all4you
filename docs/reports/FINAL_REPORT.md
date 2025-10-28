@@ -142,10 +142,10 @@ qwen3-finetuner/
 │   └── sample_data.json           # 示例数据 (10 条)
 ├── docs/
 │   ├── README.md                  # 项目说明
-│   ├── QUICKSTART.md              # 快速开始
+│   ├── docs/getting-started.md              # 快速开始
 │   ├── CHANGELOG.md               # 变更日志
 │   ├── BUGFIX_REPORT.md           # Bug 修复报告
-│   ├── MODELSCOPE_GUIDE.md        # ModelScope 指南 ⭐ NEW
+│   ├── docs/integrations/modelscope.md        # ModelScope 指南 ⭐ NEW
 │   └── PROJECT_SUMMARY.md         # 项目总结
 ├── scripts/
 │   ├── setup.sh                   # Linux/Mac 安装
@@ -349,10 +349,10 @@ load_in_4bit: true
 
 | 文档 | 内容 | 适合人群 |
 |------|------|---------|
-| [README.md](README.md) | 项目概览、快速开始 | 所有用户 |
-| [QUICKSTART.md](QUICKSTART.md) | 详细安装和使用指南 | 新手 |
-| [MODELSCOPE_GUIDE.md](MODELSCOPE_GUIDE.md) | ModelScope 完整指南 | 国内用户 ⭐ |
-| [CHANGELOG.md](CHANGELOG.md) | 版本变更记录 | 开发者 |
+| [README.md](../README.md) | 项目概览、快速开始 | 所有用户 |
+| [快速上手指南](../getting-started.md) | 详细安装和使用指南 | 新手 |
+| [ModelScope 集成指南](../integrations/modelscope.md) | ModelScope 完整指南 | 国内用户 ⭐ |
+| [CHANGELOG.md](../CHANGELOG.md) | 版本变更记录 | 开发者 |
 | [BUGFIX_REPORT.md](BUGFIX_REPORT.md) | Bug 修复详情 | 开发者 |
 | [PROJECT_SUMMARY.md](PROJECT_SUMMARY.md) | 项目技术总结 | 开发者 |
 
