@@ -13,6 +13,7 @@
 | 主题 | 内容概览 |
 | --- | --- |
 | [快速上手](docs/getting-started.md) | 安装、启动、常见工作流、故障排除与 FAQ |
+| [常见问题 (FAQ)](docs/FAQ.md) | HF_TOKEN 说明、ModelScope 使用、常见错误解决 |
 | [ModelScope 集成指南](docs/integrations/modelscope.md) | 国内镜像加速、缓存管理、CLI/Python 用法 |
 | [开发与测试手册](docs/development.md) | 本地开发环境、代码风格、后端/前端测试命令 |
 | [项目报告归档](docs/reports/README.md) | Bug 修复、阶段总结与交付报告索引 |
