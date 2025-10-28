@@ -46,7 +46,9 @@ python scripts/pipeline.py --data path/to/dataset.json --data-format alpaca --ev
 
 脚本会将处理后的数据和评测结果保存在 `backend/outputs/pipeline-run/`（或 `--output-dir` 指定的目录）下，默认使用 `Qwen/Qwen3-4B` 作为评测模型，可通过 `--judge-model` 自定义或加上 `--no-judge` 关闭。如需更快验证，可指定 `--model` 或 `--judge-model Qwen/Qwen3-0.6B`。新增的 `--device` 参数可在 `auto/cuda/mps/cpu` 间切换训练设备，`--judge-device` 则允许单独控制评测模型的运行位置。
 
-> 💡 **Apple Silicon (MPS) 小贴士**：macOS 用户可运行 `python scripts/pipeline.py --data your.json --config backend/configs/qwen3-0.6b-mps.yaml --device mps --judge-model Qwen/Qwen3-0.6B`，脚本会自动关闭 4bit 量化、启用 fp16 并加载 0.6B 模型完成快速 LoRA 验证。
+> ⚡️ **一键搜索意图 LoRA**：运行 `python scripts/pipeline.py --preset search-intent-lora` 即可自动下载魔搭上的搜索意图数据集，使用 Qwen/Qwen3-0.6B 在 MPS 上进行 LoRA 微调并复用 0.6B 作为评测模型，整个流程的产物会保存在 `backend/outputs/search-intent-lora/` 下。
+
+> 💡 **Apple Silicon (MPS) 小贴士**：若需自定义数据或参数，也可参考预设中的设置执行 `python scripts/pipeline.py --data your.json --config backend/configs/qwen3-0.6b-mps.yaml --device mps --judge-model Qwen/Qwen3-0.6B`，脚本会自动关闭 4bit 量化、启用 fp16 并加载 0.6B 模型完成快速 LoRA 验证。
 
 若希望直接从魔搭（ModelScope）拉取公开数据集，可使用新增的参数：
 

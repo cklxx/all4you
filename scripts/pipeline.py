@@ -20,12 +20,46 @@ from backend.core.trainer import Trainer_Qwen3, TrainingConfig
 from backend.core.devices import DEVICE_CHOICES
 
 
-def parse_args() -> argparse.Namespace:
+PIPELINE_PRESETS: Dict[str, Dict[str, Any]] = {
+    "search-intent-lora": {
+        "description": (
+            "下载魔搭搜索意图数据集，并在 Qwen/Qwen3-0.6B 上使用 LoRA 进行一键微调，"
+            "默认以 MPS 设备快速验证并复用 0.6B 评测模型。"
+        ),
+        "config": "backend/configs/qwen3-0.6b-mps.yaml",
+        "device": "mps",
+        "model": "Qwen/Qwen3-0.6B",
+        "judge_model": "Qwen/Qwen3-0.6B",
+        "moda_dataset": "search_intent",
+        "output_dir": "backend/outputs/search-intent-lora",
+        "data_format": "alpaca",
+        "eval_ratio": 0.1,
+    },
+}
+
+
+def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    if argv is None:
+        argv = sys.argv[1:]
+
+    preset_choices = sorted(PIPELINE_PRESETS.keys())
+    preset_help = ""
+    if preset_choices:
+        preset_help = " 可选预设: " + "; ".join(
+            f"{name}（{PIPELINE_PRESETS[name]['description']}）" for name in preset_choices
+        )
+
     parser = argparse.ArgumentParser(
         description=(
             "Run the full Qwen fine-tuning pipeline: data processing, training, and evaluation."
         )
     )
+    if preset_choices:
+        parser.add_argument(
+            "--preset",
+            choices=preset_choices,
+            help="使用预设组合快速运行常见场景。" + preset_help,
+        )
     parser.add_argument(
         "--data",
         default=None,
@@ -152,7 +186,23 @@ def parse_args() -> argparse.Namespace:
         default="datasets/modelscope",
         help="Cache directory for ModelScope datasets.",
     )
-    return parser.parse_args()
+    defaults = {
+        action.dest: action.default
+        for action in parser._actions
+        if action.dest not in {"help"}
+    }
+    args = parser.parse_args(argv)
+
+    if getattr(args, "preset", None):
+        preset = PIPELINE_PRESETS[args.preset]
+        for key, value in preset.items():
+            if key == "description":
+                continue
+            default_value = defaults.get(key)
+            if getattr(args, key, default_value) == default_value:
+                setattr(args, key, value)
+
+    return args
 
 
 def ensure_output_dir(path: Path) -> None:
@@ -237,6 +287,9 @@ def main() -> int:
     args = parse_args()
     logger.remove()
     logger.add(sys.stderr, level="INFO")
+
+    if args.preset:
+        logger.info("Using pipeline preset '%s'", args.preset)
 
     dataset_info: Optional[Dict[str, Any]] = None
 
@@ -363,6 +416,7 @@ def main() -> int:
         logger.warning("No evaluation data provided; skipping automatic evaluation.")
 
     pipeline_summary = {
+        "preset": args.preset,
         "training_data": {
             "path": str(data_path),
             "processed_snapshot": training_info["snapshot"],
