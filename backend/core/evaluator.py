@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import contextlib
+import importlib.util
+import io
 import json
 import re
 import shutil
+import socket
+import sys
 import urllib.error
 import urllib.request
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -33,6 +39,26 @@ JUDGE_PROMPT_TEMPLATE = (
     "Model Answer: {prediction}\n"
     "Evaluation:"
 )
+
+def _quiet_bitsandbytes_import() -> None:
+    """Import bitsandbytes once while silencing noisy CPU-only warnings."""
+
+    if "bitsandbytes" in sys.modules:  # already imported elsewhere
+        return
+    if importlib.util.find_spec("bitsandbytes") is None:
+        return
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="The installed version of bitsandbytes was compiled without GPU support",
+            category=UserWarning,
+        )
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                import bitsandbytes  # type: ignore  # noqa: F401
+        except Exception as exc:  # pragma: no cover - optional dependency
+            logger.debug("bitsandbytes import failed: {}", exc)
 
 
 @dataclass
@@ -108,6 +134,40 @@ class OllamaJudgeClient:
         try:
             with urllib.request.urlopen(request, timeout=self.request_timeout) as response:  # type: ignore[arg-type]
                 body = response.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:  # pragma: no cover - environment dependent
+            error_detail = ""
+            try:
+                raw = exc.read()  # type: ignore[attr-defined]
+            except Exception:
+                raw = b""
+            if raw:
+                try:
+                    parsed_error = json.loads(raw.decode("utf-8"))
+                    candidate = parsed_error.get("error") or parsed_error.get("message")
+                    if isinstance(candidate, str):
+                        error_detail = candidate.strip()
+                except Exception:
+                    error_detail = raw.decode("utf-8", "ignore").strip()
+            if exc.code == 404:
+                message = f"未在 Ollama 中找到评测模型 '{self.model_name}'。"
+                if error_detail:
+                    message = f"{message} {error_detail}"
+                advice = (
+                    f" 请通过 `ollama pull {self.model_name}` 下载安装该模型，或使用 `--judge-model` "
+                    "指定已安装的评测模型。"
+            )
+                raise OllamaJudgeUnavailable(message + advice)
+            message = f"Ollama 评测接口返回错误（HTTP {exc.code}"
+            if exc.reason:  # type: ignore[truthy-function]
+                message += f": {exc.reason}"
+            message += "）。"
+            if error_detail:
+                message = f"{message} {error_detail}"
+            raise OllamaJudgeUnavailable(message)
+        except (TimeoutError, socket.timeout) as exc:  # pragma: no cover - environment dependent
+            raise OllamaJudgeUnavailable(
+                "连接 Ollama 评测服务超时，请确认服务已启动并可访问。"
+            ) from exc
         except urllib.error.URLError as exc:  # pragma: no cover - environment dependent
             raise OllamaJudgeUnavailable(str(exc))
 
@@ -172,6 +232,7 @@ class AutoEvaluator:
         model_path = Path(self.model_path)
         if model_path.exists():
             logger.info("Loading fine-tuned model from {}", model_path)
+            _quiet_bitsandbytes_import()
             self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -184,6 +245,7 @@ class AutoEvaluator:
             self.model.to(self.torch_device)
         else:
             logger.info("Loading target model via model manager: {}", self.model_path)
+            _quiet_bitsandbytes_import()
             self.model, self.tokenizer = self.model_manager.load_model_and_tokenizer(
                 self.model_path,
                 device_map="auto" if self.device == "cuda" else None,
@@ -216,6 +278,7 @@ class AutoEvaluator:
             return
 
         logger.info("Loading judge model: {}", self.judge_model_name)
+        _quiet_bitsandbytes_import()
         self.judge_model, self.judge_tokenizer = self.model_manager.load_model_and_tokenizer(
             self.judge_model_name,
             device_map="auto" if self.judge_device == "cuda" else None,
@@ -311,7 +374,8 @@ class AutoEvaluator:
             output = self.judge_model.generate(
                 **inputs,
                 max_new_tokens=128,
-                temperature=0.0,
+                temperature=1.0,
+                do_sample=False,
                 pad_token_id=self.judge_tokenizer.pad_token_id,
             )
         generated_ids = output[0][inputs["input_ids"].shape[1]:]
