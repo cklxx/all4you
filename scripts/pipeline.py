@@ -72,9 +72,10 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--judge-model",
-        default="Qwen/Qwen3-7B",
+        default="Qwen/Qwen3-4B",
         help=(
-            "Model used for automatic evaluation. Set to 'none' to disable model-based judging."
+            "Model used for automatic evaluation. Defaults to Qwen/Qwen3-4B; "
+            "set to 'none' to disable or switch to Qwen/Qwen3-0.6B for rapid validation."
         ),
     )
     parser.add_argument(

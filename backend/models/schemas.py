@@ -34,7 +34,7 @@ class TrainingConfigCreate(BaseModel):
     """Create training config request"""
     name: str = Field(..., description="Config name")
     description: Optional[str] = None
-    model_name: str = Field(default="Qwen/Qwen3-7B")
+    model_name: str = Field(default="Qwen/Qwen3-4B")
     training_method: str = Field(default="lora", description="sft, lora, qlora, dpo, grpo")
 
     # Training parameters
@@ -59,8 +59,8 @@ class TrainingConfigCreate(BaseModel):
         json_schema_extra = {
             "example": {
                 "name": "Qwen3 LoRA Default",
-                "description": "Default LoRA configuration for Qwen3",
-                "model_name": "Qwen/Qwen3-7B",
+                "description": "Default LoRA configuration for Qwen3-4B",
+                "model_name": "Qwen/Qwen3-4B",
                 "training_method": "lora",
                 "num_train_epochs": 3,
                 "per_device_train_batch_size": 4,

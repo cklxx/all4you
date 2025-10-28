@@ -177,8 +177,10 @@
 
 ### 4. 模型支持
 - ✅ Qwen3-0.5B
+- ✅ Qwen3-0.6B（快速验证推荐）
 - ✅ Qwen3-1.8B
 - ✅ Qwen3-3B
+- ✅ Qwen3-4B（默认生产模型）
 - ✅ Qwen3-7B
 - ✅ Qwen3-14B / 14B-Instruct
 - ✅ Qwen3-30B-A3B (MoE)

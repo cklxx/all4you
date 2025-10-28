@@ -19,8 +19,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./qwen3_finetuner.db"
 
     # Model config
-    DEFAULT_MODEL: str = "Qwen/Qwen3-0.6B"  # Lightweight default model
-    RECOMMENDED_MODELS: list = ["Qwen/Qwen3-0.6B", "Qwen/Qwen3-4B"]  # Recommended for most users
+    DEFAULT_MODEL: str = "Qwen/Qwen3-4B"  # Primary production model
+    RECOMMENDED_MODELS: list = ["Qwen/Qwen3-4B", "Qwen/Qwen3-0.6B"]  # 4B for production, 0.6B for quick validation
     HF_TOKEN: Optional[str] = None
     USE_MODELSCOPE: bool = True  # Use ModelScope for faster download in China
     MODEL_CACHE_DIR: Optional[str] = None  # None = use default cache

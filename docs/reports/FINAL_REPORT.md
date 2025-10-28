@@ -258,7 +258,7 @@ USE_MODELSCOPE=True          # 国内用户设为 True
 MODEL_CACHE_DIR=             # 留空使用默认缓存
 
 # 默认模型
-DEFAULT_MODEL=Qwen/Qwen3-0.6B
+DEFAULT_MODEL=Qwen/Qwen3-4B
 
 # Hugging Face Token（可选）
 HF_TOKEN=your_token_here
@@ -272,8 +272,8 @@ DEFAULT_NUM_EPOCHS=3
 ### 训练配置 (YAML)
 
 ```yaml
-# 推荐配置 - Qwen3-0.6B + LoRA
-model_name: Qwen/Qwen3-0.6B
+# 推荐配置 - Qwen3-4B + LoRA
+model_name: Qwen/Qwen3-4B
 training_method: lora
 
 num_train_epochs: 3
@@ -285,6 +285,8 @@ max_seq_length: 2048
 lora_rank: 64
 lora_alpha: 128
 lora_dropout: 0.05
+
+# 快速验证：如需更快迭代可切换为 Qwen/Qwen3-0.6B
 
 load_in_4bit: true
 use_flash_attention: true
@@ -327,7 +329,7 @@ USE_MODELSCOPE=True
 curl http://localhost:8000/api/models/cache/list
 
 # 清除不用的模型
-curl -X DELETE http://localhost:8000/api/models/cache/Qwen_Qwen3-7B
+curl -X DELETE http://localhost:8000/api/models/cache/Qwen_Qwen3-4B
 
 # 或清空所有缓存
 curl -X DELETE http://localhost:8000/api/models/cache/all

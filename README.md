@@ -44,7 +44,7 @@
 python scripts/pipeline.py --data path/to/dataset.json --data-format alpaca --eval-ratio 0.1
 ```
 
-脚本会将处理后的数据和评测结果保存在 `backend/outputs/pipeline-run/`（或 `--output-dir` 指定的目录）下，默认使用 `Qwen/Qwen3-7B` 作为评测模型，可通过 `--judge-model` 自定义或加上 `--no-judge` 关闭。
+脚本会将处理后的数据和评测结果保存在 `backend/outputs/pipeline-run/`（或 `--output-dir` 指定的目录）下，默认使用 `Qwen/Qwen3-4B` 作为评测模型，可通过 `--judge-model` 自定义或加上 `--no-judge` 关闭。如需更快验证，可指定 `--model` 或 `--judge-model Qwen/Qwen3-0.6B`。
 
 若希望直接从魔搭（ModelScope）拉取公开数据集，可使用新增的参数：
 
