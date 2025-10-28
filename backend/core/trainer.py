@@ -241,10 +241,11 @@ class Trainer_Qwen3:
         # Load model with quantization if needed
         quantization_config = None
         if self.config.load_in_4bit:
+            import torch
             from transformers import BitsAndBytesConfig
             quantization_config = BitsAndBytesConfig(
                 load_in_4bit=True,
-                bnb_4bit_compute_dtype="float16",
+                bnb_4bit_compute_dtype=torch.float16,
                 bnb_4bit_use_double_quant=True,
                 bnb_4bit_quant_type="nf4",
             )

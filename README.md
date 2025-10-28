@@ -5,6 +5,8 @@
 > 📍 **项目路径**: `/Users/bytedance/code/learn/all4you`
 > 🌏 **国内优化**: 深度集成 ModelScope，模型下载加速 5-10 倍
 > 🚀 **推荐模型**: Qwen3-0.6B（快速验证） / Qwen3-4B（生产环境）
+> 🐍 **Python 版本**: 3.10+ (推荐 3.12)
+> 🔥 **最新更新**: 2025-10-28 - 升级依赖以支持 Python 3.12
 
 ## 文档索引
 
@@ -25,6 +27,23 @@
 - 📊 **统一日志**：完整的训练日志、指标与任务进度
 
 ## 快速开始
+
+### 方式一：使用 init.sh（推荐）
+
+```bash
+# 一键初始化环境（自动安装 uv 并配置虚拟环境）
+./init.sh
+
+# 激活虚拟环境
+source .venv/bin/activate
+
+# 启动应用
+./scripts/start.sh
+```
+
+> **uv 优势**: 依赖安装速度比 pip 快 10-100 倍，自动管理虚拟环境
+
+### 方式二：传统方式
 
 1. **安装依赖**：`pip install -r requirements.txt`
 2. **一键启动**：`./scripts/deploy.sh`（或在 Windows 上运行 `scripts\\deploy.bat`）
@@ -96,9 +115,25 @@ all4you/
 │   └── download_dataset.py      # 魔搭数据集下载与字段映射工具
 ```
 
+## 依赖版本
+
+| 依赖 | 版本 | 说明 |
+|-----|------|------|
+| **Python** | 3.10+ (推荐 3.12) | 核心运行环境 |
+| **PyTorch** | 2.9.0 | 深度学习框架 |
+| **Transformers** | 4.57.1 | Hugging Face 模型库 |
+| **PEFT** | 0.17.1 | 参数高效微调 |
+| **Accelerate** | 1.11.0 | 多设备训练加速 |
+| **FastAPI** | 0.104.1 | Web API 框架 |
+| **Pydantic** | 2.5.0 | 数据验证 |
+
+> 📋 完整依赖列表请查看 [requirements.txt](requirements.txt)
+> 📝 版本升级说明请查看 [UPGRADE_NOTES.md](UPGRADE_NOTES.md)
+
 ## 开发与测试
 
 - **后端依赖检查**：`python test_imports.py`
+- **兼容性测试**：`python test_compatibility.py`
 - **前端构建检查**：`cd frontend && npm run build`
 - 更多开发细节、代码规范与诊断方法请参阅 [开发与测试手册](docs/development.md)。
 

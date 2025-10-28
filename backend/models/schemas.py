@@ -32,6 +32,23 @@ class DataFileResponse(BaseModel):
 # ============ Training Config Schemas ============
 class TrainingConfigCreate(BaseModel):
     """Create training config request"""
+    model_config = {
+        "protected_namespaces": (),  # Allow 'model_' prefix in field names
+        "json_schema_extra": {
+            "example": {
+                "name": "Qwen3 LoRA Default",
+                "description": "Default LoRA configuration for Qwen3-4B",
+                "model_name": "Qwen/Qwen3-4B",
+                "training_method": "lora",
+                "num_train_epochs": 3,
+                "per_device_train_batch_size": 4,
+                "learning_rate": 0.0002,
+                "lora_rank": 64,
+                "lora_alpha": 128,
+            }
+        }
+    }
+
     name: str = Field(..., description="Config name")
     description: Optional[str] = None
     model_name: str = Field(default="Qwen/Qwen3-4B")
@@ -57,24 +74,14 @@ class TrainingConfigCreate(BaseModel):
     use_flash_attention: bool = Field(default=True)
     gradient_checkpointing: bool = Field(default=True)
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "name": "Qwen3 LoRA Default",
-                "description": "Default LoRA configuration for Qwen3-4B",
-                "model_name": "Qwen/Qwen3-4B",
-                "training_method": "lora",
-                "num_train_epochs": 3,
-                "per_device_train_batch_size": 4,
-                "learning_rate": 0.0002,
-                "lora_rank": 64,
-                "lora_alpha": 128,
-            }
-        }
-
 
 class TrainingConfigResponse(BaseModel):
     """Training config response"""
+    model_config = {
+        "protected_namespaces": (),  # Allow 'model_' prefix in field names
+        "from_attributes": True
+    }
+
     id: str
     name: str
     description: Optional[str]
@@ -83,9 +90,6 @@ class TrainingConfigResponse(BaseModel):
     is_default: bool
     config: Dict[str, Any]
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # ============ Training Task Schemas ============
@@ -98,6 +102,11 @@ class TrainingTaskCreate(BaseModel):
 
 class TrainingTaskResponse(BaseModel):
     """Training task response"""
+    model_config = {
+        "protected_namespaces": (),  # Allow 'model_' prefix in field names
+        "from_attributes": True
+    }
+
     id: str
     name: str
     model_name: str
@@ -120,9 +129,6 @@ class TrainingTaskResponse(BaseModel):
 
     output_dir: Optional[str]
     log_file: Optional[str]
-
-    class Config:
-        from_attributes = True
 
 
 class TrainingTaskUpdate(BaseModel):
@@ -175,6 +181,8 @@ class DataPreviewResponse(BaseModel):
 # ============ Model Management Schemas ============
 class ModelInfo(BaseModel):
     """Model information"""
+    model_config = {"protected_namespaces": ()}  # Allow 'model_' prefix in field names
+
     model_name: str
     model_size: str
     parameters: int
@@ -186,6 +194,8 @@ class ModelInfo(BaseModel):
 
 class DownloadModelRequest(BaseModel):
     """Download model request"""
+    model_config = {"protected_namespaces": ()}  # Allow 'model_' prefix in field names
+
     model_name: str = Field(..., description="Model name from Hugging Face")
     force_download: bool = Field(default=False, description="Force re-download")
 

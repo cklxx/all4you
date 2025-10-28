@@ -5,15 +5,15 @@ pydantic==2.5.0
 pydantic-settings==2.1.0
 python-multipart==0.0.6
 
-# LLM Training
-transformers==4.36.2
-torch==2.1.1
-accelerate==0.25.0
-peft==0.7.1
+# LLM Training (Python 3.12+ compatible versions)
+transformers>=4.36.2
+torch>=2.2.0  # Python 3.12 requires torch 2.2.0+
+accelerate>=0.25.0
+peft>=0.7.1
 
 # Optimization
 # unsloth  # Optional: Install separately with: pip install "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git"
-bitsandbytes==0.41.3  # For quantization
+bitsandbytes>=0.42.0  # For quantization (updated for better Python 3.12 support)
 
 # Axolotl (optional, for more advanced features)
 # axolotl==0.4.1
