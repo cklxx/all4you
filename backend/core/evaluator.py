@@ -13,6 +13,12 @@ from loguru import logger
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from core.model_manager import get_model_manager
+from core.devices import (
+    resolve_device,
+    ensure_device_environment,
+    coerce_torch_dtype,
+    torch_device,
+)
 
 
 JUDGE_PROMPT_TEMPLATE = (
@@ -50,17 +56,34 @@ class AutoEvaluator:
         max_new_tokens: int = 512,
         temperature: float = 0.7,
         top_p: float = 0.9,
+        device: str = "auto",
+        judge_device: Optional[str] = None,
     ) -> None:
         self.model_path = model_path
         self.judge_model_name = judge_model_name
         self.max_new_tokens = max_new_tokens
         self.temperature = temperature
         self.top_p = top_p
+        self.device = resolve_device(device)
+        ensure_device_environment(self.device)
+        judge_pref = judge_device if judge_device is not None else device
+        self.judge_device = resolve_device(judge_pref)
+        ensure_device_environment(self.judge_device)
 
         self.model = None
         self.tokenizer = None
         self.judge_model = None
         self.judge_tokenizer = None
+        self.target_dtype = coerce_torch_dtype(
+            self.device,
+            prefer_fp16=True,
+        )
+        self.judge_dtype = coerce_torch_dtype(
+            self.judge_device,
+            prefer_fp16=True,
+        )
+        self.torch_device = torch_device(self.device)
+        self.judge_torch_device = torch_device(self.judge_device)
 
         self.model_manager = get_model_manager()
 
@@ -76,15 +99,19 @@ class AutoEvaluator:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_path,
-                device_map="auto",
+                device_map="auto" if self.device == "cuda" else None,
+                torch_dtype=self.target_dtype,
                 trust_remote_code=True,
             )
+            self.model.to(self.torch_device)
         else:
             logger.info("Loading target model via model manager: {}", self.model_path)
             self.model, self.tokenizer = self.model_manager.load_model_and_tokenizer(
                 self.model_path,
-                device_map="auto",
+                device_map="auto" if self.device == "cuda" else None,
                 trust_remote_code=True,
+                device=self.device,
+                torch_dtype=self.target_dtype,
             )
 
         self.model.eval()
@@ -98,8 +125,10 @@ class AutoEvaluator:
         logger.info("Loading judge model: {}", self.judge_model_name)
         self.judge_model, self.judge_tokenizer = self.model_manager.load_model_and_tokenizer(
             self.judge_model_name,
-            device_map="auto",
+            device_map="auto" if self.judge_device == "cuda" else None,
             trust_remote_code=True,
+            device=self.judge_device,
+            torch_dtype=self.judge_dtype,
         )
         self.judge_model.eval()
 
@@ -137,7 +166,7 @@ class AutoEvaluator:
 
     def _generate(self, prompt: str) -> str:
         inputs = self.tokenizer(prompt, return_tensors="pt")
-        inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+        inputs = {k: v.to(self.torch_device) for k, v in inputs.items()}
         with torch.inference_mode():
             output = self.model.generate(
                 **inputs,
@@ -162,7 +191,7 @@ class AutoEvaluator:
             prediction=evaluation.prediction or "(empty)",
         )
         inputs = self.judge_tokenizer(prompt, return_tensors="pt")
-        inputs = {k: v.to(self.judge_model.device) for k, v in inputs.items()}
+        inputs = {k: v.to(self.judge_torch_device) for k, v in inputs.items()}
         with torch.inference_mode():
             output = self.judge_model.generate(
                 **inputs,

@@ -36,6 +36,8 @@ class TrainingConfigCreate(BaseModel):
     description: Optional[str] = None
     model_name: str = Field(default="Qwen/Qwen3-4B")
     training_method: str = Field(default="lora", description="sft, lora, qlora, dpo, grpo")
+    device: str = Field(default="auto", description="Preferred device: auto/cuda/mps/cpu")
+    torch_dtype: Optional[str] = Field(default=None, description="Explicit torch dtype override, e.g. float16")
 
     # Training parameters
     num_train_epochs: int = Field(default=3)

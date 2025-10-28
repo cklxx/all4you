@@ -17,6 +17,7 @@ from backend.core.data_processor import DataProcessor, validate_data_format
 from backend.core.dataset_hub import ModelScopeDatasetManager
 from backend.core.evaluator import AutoEvaluator
 from backend.core.trainer import Trainer_Qwen3, TrainingConfig
+from backend.core.devices import DEVICE_CHOICES
 
 
 def parse_args() -> argparse.Namespace:
@@ -66,6 +67,12 @@ def parse_args() -> argparse.Namespace:
         help="Directory where fine-tuned artifacts will be stored.",
     )
     parser.add_argument(
+        "--device",
+        default="auto",
+        choices=DEVICE_CHOICES,
+        help="Preferred device for fine-tuning (auto, cuda, mps, cpu).",
+    )
+    parser.add_argument(
         "--model",
         default=None,
         help="Override the base model name defined in the training config.",
@@ -76,6 +83,14 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Model used for automatic evaluation. Defaults to Qwen/Qwen3-4B; "
             "set to 'none' to disable or switch to Qwen/Qwen3-0.6B for rapid validation."
+        ),
+    )
+    parser.add_argument(
+        "--judge-device",
+        default="inherit",
+        choices=DEVICE_CHOICES + ("inherit",),
+        help=(
+            "Preferred device for the judge model. Use 'inherit' (default) to reuse --device."
         ),
     )
     parser.add_argument(
@@ -303,11 +318,17 @@ def main() -> int:
         logger.error("No samples available for training after preprocessing.")
         return 1
 
-    overrides = {"output_dir": str(output_dir)}
+    overrides = {"output_dir": str(output_dir), "device": args.device}
     if args.model:
         overrides["model_name"] = args.model
 
     training_config = load_training_config(args.config, overrides)
+
+    if args.device == "mps" and not args.model and training_config.model_name != "Qwen/Qwen3-0.6B":
+        logger.info(
+            "MPS device requested without explicit model override; switching base model to Qwen/Qwen3-0.6B for best compatibility."
+        )
+        training_config.model_name = "Qwen/Qwen3-0.6B"
 
     trainer = Trainer_Qwen3(training_config)
     trainer.load_model_and_tokenizer()
@@ -317,6 +338,10 @@ def main() -> int:
     eval_report = None
     judge_model = None if args.no_judge or args.judge_model.lower() == "none" else args.judge_model
 
+    judge_device = args.judge_device
+    if judge_device == "inherit":
+        judge_device = args.device
+
     if eval_records:
         evaluator = AutoEvaluator(
             model_path=str(output_dir),
@@ -324,6 +349,8 @@ def main() -> int:
             max_new_tokens=args.max_new_tokens,
             temperature=args.temperature,
             top_p=args.top_p,
+            device=training_config.device,
+            judge_device=judge_device,
         )
         eval_report = evaluator.evaluate(
             samples=eval_records,

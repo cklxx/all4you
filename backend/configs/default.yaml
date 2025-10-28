@@ -3,6 +3,8 @@
 # Model Configuration
 model_name: "Qwen/Qwen3-4B"
 model_type: "causal"
+device: "auto"
+torch_dtype: null
 
 # Training Method
 training_method: "lora"  # Options: sft, lora, qlora, dpo, grpo

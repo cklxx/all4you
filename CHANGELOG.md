@@ -148,6 +148,7 @@ bitsandbytes==0.41.3  # 版本更新
 - 新增 `scripts/pipeline.py` 命令行工具，可在单条命令中完成数据处理、模型微调以及自动评测，并产出结构化报告。
 - 引入 `backend/core/evaluator.py`，支持使用指定评测模型（默认 `Qwen/Qwen3-4B`）对生成结果进行打分与解释。
 - 集成 `backend/core/dataset_hub.py` 与 `scripts/download_dataset.py`，支持从魔搭（ModelScope）一键拉取内容理解、搜索意图、Query 解析等数据集，并通过 `--moda-*` 参数直接接入训练流水线。
+- 新增 Apple Silicon (MPS) 友好的 `backend/configs/qwen3-0.6b-mps.yaml` 与管道参数，支持在 Mac 上使用 `--device mps` / `--judge-device` 进行 Qwen3-0.6B LoRA 训练与自动评测。
 
 ### ♻️ 结构调整
 
