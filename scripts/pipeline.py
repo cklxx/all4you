@@ -81,35 +81,53 @@ class PipelineProgress:
         self._current = stage
 
     def complete(self, stage: str) -> None:
-        self._set_status(stage, "completed")
+        self._set_status(stage, "completed", render=False)
+        # 显示完成状态
+        idx = self._stages.index(stage) + 1
+        total = len(self._stages)
+        completed = sum(1 for s in self._status.values() if s == "completed")
+        logger.info(f"进度 {completed}/{total} - [{idx:02d}] ✓ {stage}")
         if self._current == stage:
             self._current = None
 
     def fail(self, stage: str) -> None:
-        self._set_status(stage, "failed")
+        self._set_status(stage, "failed", render=False)
+        # 显示失败状态
+        idx = self._stages.index(stage) + 1
+        total = len(self._stages)
+        completed = sum(1 for s in self._status.values() if s == "completed")
+        logger.error(f"进度 {completed}/{total} - [{idx:02d}] ✗ {stage}")
         if self._current == stage:
             self._current = None
 
-    def _set_status(self, stage: str, status: str) -> None:
+    def _set_status(self, stage: str, status: str, render: bool = True) -> None:
         if stage not in self._status:
             raise ValueError(f"Unknown stage '{stage}'")
         self._status[stage] = status
-        self._render()
+        if render:
+            self._render()
 
     def _render(self, *, initial: bool = False) -> None:
         total = len(self._stages)
         completed = sum(1 for status in self._status.values() if status == "completed")
-        header = f"进度 {completed}/{total}"
-        lines = [header]
-        for idx, stage in enumerate(self._stages, start=1):
-            status = self._status[stage]
-            symbol = self.STATUS_SYMBOLS.get(status, "?")
-            lines.append(f"  [{idx:02d}] {symbol} {stage}")
-        message = "\n".join(lines)
+
         if initial:
+            # 初始化时显示完整列表
+            header = f"进度 {completed}/{total}"
+            lines = [header]
+            for idx, stage in enumerate(self._stages, start=1):
+                status = self._status[stage]
+                symbol = self.STATUS_SYMBOLS.get(status, "?")
+                lines.append(f"  [{idx:02d}] {symbol} {stage}")
+            message = "\n".join(lines)
             logger.info("\n{}\n{}", SECTION_DIVIDER, message)
         else:
-            logger.info("\n{}\n{}\n{}", SUBSECTION_DIVIDER, message, SUBSECTION_DIVIDER)
+            # 状态更新时只显示当前阶段
+            if self._current:
+                idx = self._stages.index(self._current) + 1
+                status = self._status[self._current]
+                symbol = self.STATUS_SYMBOLS.get(status, "?")
+                logger.info(f"进度 {completed}/{total} - [{idx:02d}] {symbol} {self._current}")
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:

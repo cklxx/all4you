@@ -171,15 +171,25 @@ class ModelScopeDatasetManager:
             config.subset,
         )
 
-        # Load dataset without specifying split initially (will filter later if needed)
+        # Load dataset with minimal parameters for better compatibility
         try:
+            # Try with split parameter
             dataset = MsDataset.load(
                 config.dataset_id,
-                subset_name=config.subset if config.subset else None,
+                split=config.split,
             )
-        except Exception:
-            # Fallback: try without subset_name
-            dataset = MsDataset.load(config.dataset_id)
+        except Exception as e:
+            logger.warning(f"Failed to load with split parameter: {e}")
+            try:
+                # Fallback: try without any optional parameters
+                dataset = MsDataset.load(config.dataset_id)
+            except Exception as e2:
+                logger.error(f"Failed to load dataset: {e2}")
+                raise RuntimeError(
+                    f"Cannot load dataset {config.dataset_id}. "
+                    f"Please verify the dataset exists on ModelScope. "
+                    f"Error: {e2}"
+                )
         records: List[Dict[str, Any]] = []
         for idx, sample in enumerate(dataset):
             if limit is not None and idx >= limit:
