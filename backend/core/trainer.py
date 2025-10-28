@@ -56,7 +56,7 @@ except ImportError:
 class TrainingConfig:
     """Training configuration"""
     # Model
-    model_name: str = "Qwen/Qwen3-7B-Instruct"
+    model_name: str = "Qwen/Qwen3-7B"
     model_type: str = "causal"  # causal or seq2seq
 
     # Training method

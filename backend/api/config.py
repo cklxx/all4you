@@ -20,7 +20,7 @@ DEFAULT_CONFIGS = {
     "qwen3-lora-default": {
         "name": "Qwen3 LoRA Default",
         "description": "Default LoRA configuration optimized for Qwen3",
-        "model_name": "Qwen/Qwen3-7B-Instruct",
+        "model_name": "Qwen/Qwen3-7B",
         "training_method": "lora",
         "config": {
             "num_train_epochs": 3,
@@ -41,7 +41,7 @@ DEFAULT_CONFIGS = {
     "qwen3-qlora-fast": {
         "name": "Qwen3 QLoRA Fast",
         "description": "QLoRA configuration for fast training with minimal VRAM",
-        "model_name": "Qwen/Qwen3-14B-Instruct",
+        "model_name": "Qwen/Qwen3-14B",
         "training_method": "qlora",
         "config": {
             "num_train_epochs": 2,
@@ -62,7 +62,7 @@ DEFAULT_CONFIGS = {
     "qwen3-sft-full": {
         "name": "Qwen3 SFT Full",
         "description": "Full fine-tuning configuration for supervised fine-tuning",
-        "model_name": "Qwen/Qwen3-7B-Instruct",
+        "model_name": "Qwen/Qwen3-7B",
         "training_method": "sft",
         "config": {
             "num_train_epochs": 3,
@@ -80,7 +80,7 @@ DEFAULT_CONFIGS = {
     "qwen3-dpo-preference": {
         "name": "Qwen3 DPO Preference",
         "description": "Direct Preference Optimization for alignment training",
-        "model_name": "Qwen/Qwen3-7B-Instruct",
+        "model_name": "Qwen/Qwen3-7B",
         "training_method": "dpo",
         "config": {
             "num_train_epochs": 1,

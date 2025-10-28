@@ -39,6 +39,7 @@
 - ✅ 更新默认模型为 0.6B 和 4B
 - ✅ 添加缓存管理 API（4 个新端点）
 - ✅ 编写 ModelScope 完整指南
+- ✅ 新增魔搭数据集一键下载能力（`scripts/pipeline.py --moda-*` 与 `scripts/download_dataset.py`）
 
 ### 4. 项目重组
 - ✅ 将所有文件移到根目录
@@ -93,6 +94,7 @@
 │   │   ├── config.py              # 配置管理
 │   │   ├── database.py            # 数据库
 │   │   ├── data_processor.py      # 数据处理
+│   │   ├── dataset_hub.py         # 魔搭数据下载与映射 ⭐
 │   │   ├── trainer.py             # 训练引擎
 │   │   └── model_manager.py       # 模型管理 ⭐
 │   ├── models/                     # Pydantic 模型
@@ -118,8 +120,10 @@
 ├── PROJECT_SUMMARY.md              # 项目总结
 ├── COMPLETION_SUMMARY.md           # 本文档 ⭐
 ├── requirements.txt                # Python 依赖
-├── setup.sh / setup.bat           # 安装脚本
-├── start.sh / start.bat           # 启动脚本
+├── scripts/setup.sh / scripts/setup.bat           # 安装脚本
+├── scripts/start.sh / scripts/start.bat           # 启动脚本
+├── scripts/pipeline.py                            # 数据处理 + 训练 + 评测 CLI ⭐
+├── scripts/download_dataset.py                    # 魔搭数据下载工具 ⭐
 └── test_imports.py                # 测试脚本
 ```
 
@@ -133,12 +137,12 @@
 cd /Users/bytedance/code/learn/all4you
 
 # 安装依赖
-chmod +x setup.sh
-./setup.sh
+chmod +x scripts/setup.sh
+./scripts/setup.sh
 
 # 启动服务
-chmod +x start.sh
-./start.sh
+chmod +x scripts/start.sh
+./scripts/start.sh
 ```
 
 ### 方法 2: 手动启动
@@ -205,8 +209,8 @@ npm run dev
 - ✅ **7B/14B**: 高性能需求
 
 ### 4. 开箱即用
-- ✅ **一键安装**: setup.sh / setup.bat
-- ✅ **一键启动**: start.sh / start.bat
+- ✅ **一键安装**: scripts/setup.sh / scripts/setup.bat
+- ✅ **一键启动**: scripts/start.sh / scripts/start.bat
 - ✅ **示例数据**: 10 条多样化样本
 - ✅ **预设配置**: 4 个默认训练配置
 
@@ -385,7 +389,7 @@ MIT License - 自由使用、修改和分发
 
 **项目位置**: `/Users/bytedance/code/learn/all4you`
 
-**立即开始**: `./setup.sh && ./start.sh`
+**立即开始**: `./scripts/setup.sh && ./scripts/start.sh`
 
 ---
 

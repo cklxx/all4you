@@ -65,14 +65,6 @@ AVAILABLE_MODELS = {
         "description": "Mid-size Qwen3 model, recommended for most use cases",
         "supported_training_methods": ["sft", "lora", "qlora", "dpo"]
     },
-    "Qwen/Qwen3-7B-Instruct": {
-        "model_name": "Qwen/Qwen3-7B-Instruct",
-        "model_size": "7B",
-        "parameters": 7_000_000_000,
-        "max_seq_length": 2048,
-        "description": "Instruction-tuned 7B Qwen3 model, default choice",
-        "supported_training_methods": ["sft", "lora", "qlora", "dpo"]
-    },
     "Qwen/Qwen3-14B": {
         "model_name": "Qwen/Qwen3-14B",
         "model_size": "14B",

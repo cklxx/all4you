@@ -2,6 +2,10 @@
 
 # Qwen3 Fine-tuner Startup Script
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "$ROOT_DIR"
+
 echo "🚀 Starting Qwen3 Fine-tuner..."
 
 # Create virtual environment if it doesn't exist

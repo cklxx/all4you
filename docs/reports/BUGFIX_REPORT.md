@@ -211,8 +211,8 @@ unsloth==2024.1  # ❌ 包不存在
 ### 6. 自动化安装脚本
 
 **新增文件**:
-- `setup.sh` - Linux/Mac 自动安装脚本
-- `setup.bat` - Windows 自动安装脚本
+- `scripts/setup.sh` - Linux/Mac 自动安装脚本
+- `scripts/setup.bat` - Windows 自动安装脚本
 
 **功能**:
 - ✅ 自动创建虚拟环境
@@ -225,11 +225,11 @@ unsloth==2024.1  # ❌ 包不存在
 **使用方法**:
 ```bash
 # Linux/Mac
-chmod +x setup.sh
-./setup.sh
+chmod +x scripts/setup.sh
+./scripts/setup.sh
 
 # Windows
-setup.bat
+scripts/setup.bat
 ```
 
 ---
@@ -344,7 +344,7 @@ python test_imports.py
 ### 3. 集成测试（手动）
 ```bash
 # 启动服务
-./start.sh
+./scripts/start.sh
 
 # 访问 API 文档
 open http://localhost:8000/docs

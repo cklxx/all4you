@@ -141,3 +141,15 @@ bitsandbytes==0.41.3  # 版本更新
 - `Removed` - 已移除的功能
 - `Fixed` - 问题修复
 - `Security` - 安全性修复
+# [Unreleased]
+
+### ✨ 新增功能
+
+- 新增 `scripts/pipeline.py` 命令行工具，可在单条命令中完成数据处理、模型微调以及自动评测，并产出结构化报告。
+- 引入 `backend/core/evaluator.py`，支持使用指定评测模型（默认 `Qwen/Qwen3-7B`）对生成结果进行打分与解释。
+- 集成 `backend/core/dataset_hub.py` 与 `scripts/download_dataset.py`，支持从魔搭（ModelScope）一键拉取内容理解、搜索意图、Query 解析等数据集，并通过 `--moda-*` 参数直接接入训练流水线。
+
+### ♻️ 结构调整
+
+- 所有 Shell/Bat 启动脚本迁移至 `scripts/` 目录，统一路径并更新 README、文档示例说明。
+

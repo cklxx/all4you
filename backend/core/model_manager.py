@@ -32,7 +32,6 @@ class ModelManager:
         "Qwen/Qwen3-3B": "Qwen/Qwen3-3B",
         "Qwen/Qwen3-4B": "Qwen/Qwen3-4B",
         "Qwen/Qwen3-7B": "Qwen/Qwen3-7B",
-        "Qwen/Qwen3-7B-Instruct": "Qwen/Qwen3-7B-Instruct",
         "Qwen/Qwen3-14B": "Qwen/Qwen3-14B",
         "Qwen/Qwen3-14B-Instruct": "Qwen/Qwen3-14B-Instruct",
     }
