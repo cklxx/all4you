@@ -62,15 +62,7 @@ AVAILABLE_MODELS = {
         "model_size": "7B",
         "parameters": 7_000_000_000,
         "max_seq_length": 2048,
-        "description": "Mid-size Qwen3 model, recommended for most use cases",
-        "supported_training_methods": ["sft", "lora", "qlora", "dpo"]
-    },
-    "Qwen/Qwen3-7B-Instruct": {
-        "model_name": "Qwen/Qwen3-7B-Instruct",
-        "model_size": "7B",
-        "parameters": 7_000_000_000,
-        "max_seq_length": 2048,
-        "description": "Instruction-tuned 7B Qwen3 model, default choice",
+        "description": "高性能 Qwen3 模型，适合对生成质量有更高要求的场景",
         "supported_training_methods": ["sft", "lora", "qlora", "dpo"]
     },
     "Qwen/Qwen3-14B": {

@@ -36,7 +36,7 @@ MODEL_CACHE_DIR=/path/to/cache
 | --- | --- | --- |
 | 快速实验 | `model_name: Qwen/Qwen3-0.6B` | 600M 参数，显存需求低，下载 ~1.2GB |
 | 通用生产（推荐） | `model_name: Qwen/Qwen3-4B` | 性能均衡，显存 ~12GB（QLoRA） |
-| 高性能 | `model_name: Qwen/Qwen3-7B-Instruct`
+| 高性能 | `model_name: Qwen/Qwen3-7B`
 `model_name: Qwen/Qwen3-14B-Instruct` | 更高指标，需更多显存与下载时间 |
 
 ## 4. 常用操作

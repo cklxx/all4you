@@ -31,6 +31,10 @@
   - 支持多种数据结构：Alpaca、ShareGPT、Raw
   - 格式验证和统计
   - Hugging Face Dataset 集成
+- **魔搭数据下载** (`backend/core/dataset_hub.py`)
+  - 预置内容理解、搜索意图、Query 解析数据映射
+  - 自动化字段转换与缓存管理
+  - 与命令行脚本无缝集成
 
 - **训练引擎** (`backend/core/trainer.py`)
   - Unsloth 集成支持
@@ -131,8 +135,10 @@
 
 ### 4. 启动脚本
 
-- `start.sh` - Linux/Mac 一键启动脚本
-- `start.bat` - Windows 一键启动脚本
+- `scripts/start.sh` - Linux/Mac 一键启动脚本
+- `scripts/start.bat` - Windows 一键启动脚本
+- `scripts/pipeline.py` - 数据处理 + 训练 + 评测一键 CLI
+- `scripts/download_dataset.py` - 魔搭数据集下载与映射工具
 - 自动安装依赖、创建目录、启动前后端
 
 ### 5. 文档
@@ -158,6 +164,7 @@
 - ✅ Alpaca 数据结构
 - ✅ ShareGPT 对话格式
 - ✅ 原始文本格式
+- ✅ 魔搭（ModelScope）数据源自动下载与字段映射
 - ✅ 数据验证和预览
 
 ### 3. 性能优化
@@ -170,9 +177,11 @@
 
 ### 4. 模型支持
 - ✅ Qwen3-0.5B
+- ✅ Qwen3-0.6B（快速验证推荐）
 - ✅ Qwen3-1.8B
 - ✅ Qwen3-3B
-- ✅ Qwen3-7B / 7B-Instruct
+- ✅ Qwen3-4B（默认生产模型）
+- ✅ Qwen3-7B
 - ✅ Qwen3-14B / 14B-Instruct
 - ✅ Qwen3-30B-A3B (MoE)
 
@@ -219,14 +228,14 @@
 ### 快速开始（Linux/Mac）
 ```bash
 cd qwen3-finetuner
-chmod +x start.sh
-./start.sh
+chmod +x scripts/start.sh
+./scripts/start.sh
 ```
 
 ### 快速开始（Windows）
 ```bash
 cd qwen3-finetuner
-start.bat
+scripts/start.bat
 ```
 
 ### 手动启动

@@ -43,6 +43,12 @@ else:
     Dataset = Any
 
 from core.model_manager import get_model_manager
+from core.devices import (
+    resolve_device,
+    ensure_device_environment,
+    coerce_torch_dtype,
+    torch_device,
+)
 
 try:
     from unsloth import FastLanguageModel, is_bfloat16_supported
@@ -56,8 +62,10 @@ except ImportError:
 class TrainingConfig:
     """Training configuration"""
     # Model
-    model_name: str = "Qwen/Qwen3-7B-Instruct"
+    model_name: str = "Qwen/Qwen3-4B"
     model_type: str = "causal"  # causal or seq2seq
+    device: str = "auto"
+    torch_dtype: Optional[str] = None
 
     # Training method
     training_method: str = "lora"  # sft, lora, qlora, dpo, grpo
@@ -110,6 +118,8 @@ class TrainingConfig:
         """Post-initialization hook"""
         if self.lora_target_modules is None:
             self.lora_target_modules = ["q_proj", "v_proj"]
+        if not self.device:
+            self.device = "auto"
 
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> "TrainingConfig":
@@ -130,7 +140,34 @@ class Trainer_Qwen3:
         self.model = None
         self.tokenizer = None
         self.trainer = None
-        logger.info(f"Initialized Trainer with config: {config.model_name}")
+        self.device = resolve_device(self.config.device)
+        ensure_device_environment(self.device)
+        self.config.device = self.device
+        self._adjust_config_for_device()
+        self.resolved_dtype = coerce_torch_dtype(
+            self.device,
+            explicit=self.config.torch_dtype,
+            prefer_bf16=self.config.bf16,
+            prefer_fp16=self.config.fp16 or self.device == "mps",
+        )
+        if self.resolved_dtype is not None and not self.config.torch_dtype:
+            # Persist human readable dtype for downstream reporting
+            self.config.torch_dtype = str(self.resolved_dtype).split(".")[-1]
+        if self.resolved_dtype is None and self.config.torch_dtype:
+            # Remove stale dtype hint when resolution failed
+            self.config.torch_dtype = None
+        self.torch_device = torch_device(self.device)
+        dtype_repr = (
+            str(self.resolved_dtype).replace("torch.", "")
+            if self.resolved_dtype is not None
+            else "float32"
+        )
+        logger.info(
+            "Initialized Trainer for {} using device={} (dtype={})",
+            config.model_name,
+            self.device,
+            dtype_repr,
+        )
 
     @staticmethod
     def _ensure_transformers_available():
@@ -146,7 +183,11 @@ class Trainer_Qwen3:
         logger.info(f"Loading model: {self.config.model_name}")
 
         # Use Unsloth if available and not using quantization
-        if HAS_UNSLOTH and self.config.training_method in ["lora", "qlora"]:
+        if (
+            HAS_UNSLOTH
+            and self.config.training_method in ["lora", "qlora"]
+            and self.device != "mps"
+        ):
             logger.info("Using Unsloth for faster training")
             self.model, self.tokenizer = self._load_model_with_unsloth()
         else:
@@ -161,7 +202,7 @@ class Trainer_Qwen3:
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_name=self.config.model_name,
             max_seq_length=max_seq_length,
-            dtype=None,  # Auto-detect
+            dtype=self.resolved_dtype,
             load_in_4bit=load_in_4bit,
             token=os.getenv("HF_TOKEN"),
         )
@@ -208,13 +249,20 @@ class Trainer_Qwen3:
                 bnb_4bit_quant_type="nf4",
             )
 
+        device_map: Optional[str] = "auto" if self.device == "cuda" else None
         model = AutoModelForCausalLM.from_pretrained(
             self.config.model_name,
             quantization_config=quantization_config,
-            device_map="auto",
+            device_map=device_map,
+            torch_dtype=self.resolved_dtype,
             trust_remote_code=True,
             token=os.getenv("HF_TOKEN"),
         )
+
+        if device_map is None:
+            model.to(self.torch_device)
+        elif self.device.startswith("cuda"):
+            model.to(self.torch_device)
 
         # Add LoRA
         if self.config.training_method == "lora":
@@ -314,8 +362,8 @@ class Trainer_Qwen3:
             save_total_limit=self.config.save_total_limit,
             evaluation_strategy=self.config.evaluation_strategy,
             eval_steps=self.config.eval_steps if eval_dataset else None,
-            fp16=self.config.fp16,
-            bf16=self.config.bf16,
+            fp16=self.config.fp16 and self.device in ("cuda", "mps"),
+            bf16=self.config.bf16 and self.device.startswith("cuda"),
             gradient_checkpointing=self.config.gradient_checkpointing,
             report_to=["tensorboard"],
             push_to_hub=False,
@@ -362,3 +410,35 @@ class Trainer_Qwen3:
         self.model = AutoModelForCausalLM.from_pretrained(model_path)
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         logger.info("Model loaded successfully")
+
+    def _adjust_config_for_device(self) -> None:
+        """Tweak configuration knobs based on the resolved device."""
+        if self.device != "cuda" and self.config.load_in_4bit:
+            logger.warning(
+                "4-bit quantization is only supported on CUDA. Disabling for device {}.",
+                self.device,
+            )
+            self.config.load_in_4bit = False
+
+        if self.device == "mps":
+            if self.config.bf16:
+                logger.warning("bfloat16 is not supported on MPS; falling back to fp16.")
+                self.config.bf16 = False
+            if not self.config.fp16:
+                logger.info("Enabling fp16 to match MPS hardware constraints.")
+                self.config.fp16 = True
+            if self.config.torch_dtype and self.config.torch_dtype.lower() != "float16":
+                logger.info("Overriding torch_dtype to float16 for MPS compatibility.")
+                self.config.torch_dtype = "float16"
+
+        if self.device == "cpu" and self.config.fp16:
+            logger.warning("fp16 is not supported on CPU; reverting to full precision.")
+            self.config.fp16 = False
+        if self.device == "cpu" and self.config.torch_dtype:
+            dtype_lower = self.config.torch_dtype.lower()
+            if dtype_lower in {"float16", "bfloat16"}:
+                logger.warning(
+                    "Half-precision dtype '%s' is not supported on CPU; clearing override.",
+                    self.config.torch_dtype,
+                )
+                self.config.torch_dtype = None

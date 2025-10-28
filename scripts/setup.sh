@@ -2,6 +2,10 @@
 
 # Qwen3 Fine-tuner Setup Script
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "$ROOT_DIR"
+
 echo "🔧 Setting up Qwen3 Fine-tuner..."
 
 # Check Python version
@@ -58,7 +62,7 @@ if [ $? -eq 0 ]; then
     echo ""
     echo "Next steps:"
     echo "  1. Edit .env and add your Hugging Face token (optional)"
-    echo "  2. Run './start.sh' to start the application"
+    echo "  2. Run './scripts/start.sh' to start the application"
     echo "  3. Visit http://localhost:8000/docs for API documentation"
 else
     echo ""

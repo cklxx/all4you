@@ -27,13 +27,48 @@
 ## 快速开始
 
 1. **安装依赖**：`pip install -r requirements.txt`
-2. **启动后端**：`python backend/app.py`
-3. **启动前端（可选）**：`cd frontend && npm install && npm run dev`
-4. **访问服务**：
+2. **一键启动**：`./scripts/deploy.sh`（或在 Windows 上运行 `scripts\\deploy.bat`）
+3. **手动启动后端**：`python backend/app.py`
+4. **手动启动前端（可选）**：`cd frontend && npm install && npm run dev`
+5. **访问服务**：
    - API 文档：http://localhost:8000/docs
    - Web 界面：http://localhost:5173
 
 > 详细安装步骤与常见问题，请参见 [快速上手指南](docs/getting-started.md)。
+
+### 一键数据处理 + 微调 + 评测
+
+使用新的 CLI 脚本可在单条命令中完成数据清洗、模型训练与自动化评测：
+
+```bash
+python scripts/pipeline.py --data path/to/dataset.json --data-format alpaca --eval-ratio 0.1
+```
+
+脚本会将处理后的数据和评测结果保存在 `backend/outputs/pipeline-run/`（或 `--output-dir` 指定的目录）下，默认使用 `Qwen/Qwen3-4B` 作为评测模型，可通过 `--judge-model` 自定义或加上 `--no-judge` 关闭。如需更快验证，可指定 `--model` 或 `--judge-model Qwen/Qwen3-0.6B`。新增的 `--device` 参数可在 `auto/cuda/mps/cpu` 间切换训练设备，`--judge-device` 则允许单独控制评测模型的运行位置，`--fallback-judge-model` 则可配置主评测模型不可用时的自动回退策略。
+
+> ⚡️ **一键搜索意图 LoRA**：运行 `python scripts/pipeline.py --preset search-intent-lora` 即可自动下载魔搭上的搜索意图数据集，使用 Qwen/Qwen3-0.6B 在 MPS 上进行 LoRA 微调，并优先调用本地 Ollama `qwen2:8b` 评测模型；若未安装 Ollama，则自动回退至 0.6B 完成打分。整个流程的产物会保存在 `backend/outputs/search-intent-lora/` 下。
+
+> 💡 **Apple Silicon (MPS) 小贴士**：若需自定义数据或参数，也可参考预设中的设置执行 `python scripts/pipeline.py --data your.json --config backend/configs/qwen3-0.6b-mps.yaml --device mps --judge-model Qwen/Qwen3-0.6B`，脚本会自动关闭 4bit 量化、启用 fp16 并加载 0.6B 模型完成快速 LoRA 验证。
+
+若希望直接从魔搭（ModelScope）拉取公开数据集，可使用新增的参数：
+
+```bash
+# 直接下载魔搭预设数据集并完成后续流程
+python scripts/pipeline.py --moda-dataset content_understanding --moda-limit 2000
+
+# 自定义字段映射与切分
+python scripts/pipeline.py \
+  --moda-dataset iic/nlp_search_intent \
+  --moda-fields instruction=query,output=intent \
+  --data-format alpaca
+```
+
+独立的数据下载工具位于 `scripts/download_dataset.py`，支持列出预设、只拉取原始数据或生成自定义映射：
+
+```bash
+./scripts/download_dataset.py --list
+./scripts/download_dataset.py content_understanding --limit 500 --show-json
+```
 
 ## 目录结构
 
@@ -52,8 +87,13 @@ all4you/
 │   └── *.md              # 指南、手册等
 ├── examples/              # 示例数据与配置
 ├── requirements.txt       # Python 依赖列表
-├── setup.sh / setup.bat   # 一键安装脚本
-└── start.sh / start.bat   # 一键启动脚本
+├── scripts/               # 自动化脚本与 CLI 工具
+│   ├── deploy.sh / deploy.bat   # 零依赖一键部署脚本
+│   ├── dev.sh                    # 本地开发便捷启动脚本
+│   ├── setup.sh / setup.bat      # 依赖安装与环境检查
+│   ├── start.sh / start.bat      # 手动启动后端 + 前端脚本
+│   ├── pipeline.py              # 数据处理 + 训练 + 评测一键 CLI
+│   └── download_dataset.py      # 魔搭数据集下载与字段映射工具
 ```
 
 ## 开发与测试
