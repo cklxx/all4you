@@ -6,6 +6,7 @@ from . import (
     training,
     models,
     config,
+    datasets,
 )
 
 router = APIRouter()
@@ -15,5 +16,6 @@ router.include_router(data.router, prefix="/data", tags=["Data Management"])
 router.include_router(training.router, prefix="/train", tags=["Training"])
 router.include_router(models.router, prefix="/models", tags=["Model Management"])
 router.include_router(config.router, prefix="/config", tags=["Configuration"])
+router.include_router(datasets.router, prefix="/datasets", tags=["Dataset Download"])
 
 __all__ = ["router"]

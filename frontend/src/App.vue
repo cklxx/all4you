@@ -10,6 +10,7 @@
         <el-button @click="navigateTo('data')">Data</el-button>
         <el-button @click="navigateTo('training')">Training</el-button>
         <el-button @click="navigateTo('models')">Models</el-button>
+        <el-button @click="navigateTo('downloads')">Downloads</el-button>
         <el-button @click="navigateTo('docs')">API Docs</el-button>
       </div>
     </el-header>

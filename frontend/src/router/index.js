@@ -3,6 +3,7 @@ import Home from '../pages/Home.vue'
 import DataManagement from '../pages/DataManagement.vue'
 import Training from '../pages/Training.vue'
 import Models from '../pages/Models.vue'
+import Downloads from '../pages/Downloads.vue'
 
 const routes = [
   {
@@ -24,6 +25,11 @@ const routes = [
     path: '/models',
     name: 'models',
     component: Models
+  },
+  {
+    path: '/downloads',
+    name: 'downloads',
+    component: Downloads
   }
 ]
 
