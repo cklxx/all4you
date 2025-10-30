@@ -15,7 +15,7 @@ import urllib.request
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 from loguru import logger
@@ -31,13 +31,18 @@ from .devices import (
 
 
 JUDGE_PROMPT_TEMPLATE = (
-    "You are an expert evaluator. Given the instruction, optional input, reference answer, "
-    "and the model answer, provide a JSON object with keys 'score' (1-5) and 'explanation'.\n"
-    "Instruction: {instruction}\n"
-    "Input: {input}\n"
-    "Reference Answer: {reference}\n"
-    "Model Answer: {prediction}\n"
-    "Evaluation:"
+    "You are an expert evaluator for a single-label classification task."
+    " The model must output exactly one intent category from the official taxonomy."
+    " Compare the model answer with the provided reference label and grade it strictly:"
+    "\n- Score 5 if the trimmed model answer matches the reference label exactly."
+    "\n- Score 3 if the answer is semantically equivalent (e.g. synonymous wording) but not an exact match."
+    "\n- Score 1 otherwise."
+    "\nReturn a JSON object with keys 'score' and 'explanation'."
+    "\nInstruction: {instruction}"
+    "\nInput: {input}"
+    "\nReference Label: {reference}"
+    "\nModel Answer: {prediction}"
+    "\nEvaluation:"
 )
 
 def _quiet_bitsandbytes_import() -> None:
@@ -70,6 +75,7 @@ class SampleEvaluation:
     input_text: str
     reference: str
     prediction: str
+    raw_prediction: Optional[str] = None
     judge_score: Optional[float] = None
     judge_explanation: Optional[str] = None
     judge_raw: Optional[str] = None
@@ -88,7 +94,7 @@ class OllamaJudgeClient:
         *,
         base_url: str = "http://127.0.0.1:11434",
         health_timeout: float = 2.0,
-        request_timeout: float = 60.0,
+        request_timeout: float = 180.0,
     ) -> None:
         self.model_name = model_name
         self.base_url = base_url.rstrip("/")
@@ -118,15 +124,20 @@ class OllamaJudgeClient:
             )
 
     def generate(self, prompt: str) -> str:
+        # Use chat API format to properly control thinking mode
         payload = {
             "model": self.model_name,
-            "prompt": prompt,
+            "messages": [{"role": "user", "content": prompt}],
             "stream": False,
-            "options": {"temperature": 0.0},
+            "think": False,  # Disable thinking mode for faster responses
+            "options": {
+                "temperature": 0.0,
+                "num_predict": 512,  # Allow enough tokens for judge response
+            },
         }
         data = json.dumps(payload).encode("utf-8")
         request = urllib.request.Request(
-            f"{self.base_url}/api/generate",
+            f"{self.base_url}/api/chat",
             data=data,
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -176,9 +187,11 @@ class OllamaJudgeClient:
         except json.JSONDecodeError as exc:
             raise RuntimeError(f"无法解析 Ollama 返回的内容: {exc}")
 
-        text = parsed.get("response")
+        # Parse chat API response format
+        message = parsed.get("message", {})
+        text = message.get("content")
         if not isinstance(text, str):
-            raise RuntimeError("Ollama 响应缺少 'response' 字段或类型不正确。")
+            raise RuntimeError("Ollama 响应缺少 'message.content' 字段或类型不正确。")
         return text.strip()
 
 
@@ -337,6 +350,45 @@ class AutoEvaluator:
         prediction = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
         return prediction.strip()
 
+    @staticmethod
+    def _postprocess_prediction(
+        raw_prediction: str,
+        label_candidates: Optional[set[str]],
+    ) -> str:
+        text = raw_prediction.strip()
+        if not text or not label_candidates:
+            return text
+
+        # Split into manageable segments to search for known labels
+        separators = ("\n", "。", "！", "?", "？", ";", "；")
+        segments = [text]
+        for sep in separators:
+            new_segments: List[str] = []
+            for segment in segments:
+                new_segments.extend(segment.split(sep))
+            segments = new_segments
+
+        cleaned_segments = [
+            segment.strip(" \t-—·•:：")
+            for segment in segments
+            if segment.strip()
+        ]
+
+        for segment in cleaned_segments:
+            if segment in label_candidates:
+                return segment
+
+        for segment in cleaned_segments:
+            for label in label_candidates:
+                if label in segment:
+                    return label
+
+        for label in label_candidates:
+            if label in text:
+                return label
+
+        return cleaned_segments[0] if cleaned_segments else text
+
     def _judge(self, evaluation: SampleEvaluation) -> None:
         prompt = JUDGE_PROMPT_TEMPLATE.format(
             instruction=evaluation.instruction,
@@ -410,23 +462,40 @@ class AutoEvaluator:
             self.active_judge_model_name = None
             self._load_judge_model()
 
+        extracted_samples: List[Tuple[int, str, str, str]] = []
+        for idx, sample in enumerate(samples):
+            instruction, input_text, reference = self._extract_text(sample, format_type)
+            extracted_samples.append((idx, instruction, input_text, reference))
+
+        label_candidates = {
+            reference
+            for _, _, _, reference in extracted_samples
+            if reference and len(reference) <= 64
+        }
+        enforce_single_label = bool(label_candidates and len(label_candidates) <= 64)
+
         results: List[SampleEvaluation] = []
         scores: List[float] = []
 
-        for idx, sample in enumerate(samples):
-            instruction, input_text, reference = self._extract_text(sample, format_type)
+        for idx, instruction, input_text, reference in extracted_samples:
             prompt = self._build_prompt(instruction, input_text)
             if not prompt:
                 logger.warning("Skipping sample {} due to empty prompt", idx)
                 continue
 
-            prediction = self._generate(prompt)
+            raw_prediction = self._generate(prompt)
+            prediction = (
+                self._postprocess_prediction(raw_prediction, label_candidates)
+                if enforce_single_label
+                else raw_prediction
+            )
             result = SampleEvaluation(
                 index=idx,
                 instruction=instruction,
                 input_text=input_text,
                 reference=reference,
                 prediction=prediction,
+                raw_prediction=raw_prediction,
             )
 
             if use_judge and (self.judge_model is not None or self._ollama_judge is not None):
@@ -449,6 +518,7 @@ class AutoEvaluator:
                     "input": r.input_text,
                     "reference": r.reference,
                     "prediction": r.prediction,
+                    "raw_prediction": r.raw_prediction,
                     "judge_score": r.judge_score,
                     "judge_explanation": r.judge_explanation,
                     "judge_raw": r.judge_raw,
