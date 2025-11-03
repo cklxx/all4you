@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -14,7 +14,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from loguru import logger
 
-from backend.core.dataset_hub import ModelScopeDatasetManager
+from backend.core.dataset_hub import ModelScopeDatasetManager, prepare_huggingface_dataset
 
 
 def parse_field_mapping(mapping: Optional[str]) -> Dict[str, str]:
@@ -76,6 +76,12 @@ def parse_args() -> argparse.Namespace:
         help="List available presets bundled with the project.",
     )
     parser.add_argument(
+        "--source",
+        choices=["modelscope", "huggingface"],
+        default="modelscope",
+        help="Dataset backend to download from.",
+    )
+    parser.add_argument(
         "--show-json",
         action="store_true",
         help="Print the download metadata as JSON after completion.",
@@ -116,18 +122,34 @@ def main() -> int:
         logger.error(str(exc))
         return 1
 
-    manager = ModelScopeDatasetManager(cache_dir=args.cache_dir)
-    try:
-        info = manager.prepare_for_training(
-            name_or_id=args.dataset,
-            split=args.split,
-            subset=args.subset,
-            fields=field_mapping or None,
-            limit=args.limit,
-        )
-    except Exception as exc:  # pragma: no cover - external dependency call
-        logger.error("Failed to download dataset: {}", exc)
-        return 1
+    if args.source == "huggingface" and args.cache_dir == "datasets/modelscope":
+        args.cache_dir = "datasets/huggingface"
+
+    if args.source == "huggingface":
+        try:
+            info = download_huggingface_dataset(
+                dataset_id=args.dataset,
+                split=args.split,
+                fields=field_mapping or None,
+                limit=args.limit,
+                cache_dir=args.cache_dir,
+            )
+        except Exception as exc:
+            logger.error("Failed to download Hugging Face dataset: {}", exc)
+            return 1
+    else:
+        manager = ModelScopeDatasetManager(cache_dir=args.cache_dir)
+        try:
+            info = manager.prepare_for_training(
+                name_or_id=args.dataset,
+                split=args.split,
+                subset=args.subset,
+                fields=field_mapping or None,
+                limit=args.limit,
+            )
+        except Exception as exc:  # pragma: no cover - external dependency call
+            logger.error("Failed to download dataset: {}", exc)
+            return 1
 
     logger.info("Dataset stored at: %s", info["data_path"])
     if args.show_json:

@@ -198,6 +198,9 @@ class Trainer_Qwen3:
         self.config = config
         self.model = None
         self.tokenizer = None
+        self.model_manager = get_model_manager()
+        self.cache_dir = self.model_manager.cache_dir
+        os.environ.setdefault("TRANSFORMERS_CACHE", str(self.cache_dir))
         self.trainer = None
         self.device = resolve_device(self.config.device)
         ensure_device_environment(self.device)
@@ -290,6 +293,7 @@ class Trainer_Qwen3:
         tokenizer = AutoTokenizer.from_pretrained(
             self.config.model_name,
             trust_remote_code=True,
+            cache_dir=str(self.cache_dir),
             token=os.getenv("HF_TOKEN"),
         )
 
@@ -316,6 +320,7 @@ class Trainer_Qwen3:
             device_map=device_map,
             torch_dtype=self.resolved_dtype,
             trust_remote_code=True,
+            cache_dir=str(self.cache_dir),
             token=os.getenv("HF_TOKEN"),
         )
 

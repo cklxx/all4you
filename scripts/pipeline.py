@@ -18,7 +18,7 @@ import yaml
 from loguru import logger
 
 from backend.core.data_processor import DataProcessor, validate_data_format
-from backend.core.dataset_hub import ModelScopeDatasetManager
+from backend.core.dataset_hub import ModelScopeDatasetManager, prepare_huggingface_dataset
 from backend.core.evaluator import AutoEvaluator, OllamaJudgeUnavailable
 from backend.core.trainer import Trainer_Qwen3, TrainingConfig
 from backend.core.devices import DEVICE_CHOICES
@@ -37,7 +37,7 @@ PIPELINE_PRESETS: Dict[str, Dict[str, Any]] = {
         "config": "backend/configs/qwen3-0.6b-mps.yaml",
         "device": "mps",
         "model": "Qwen/Qwen3-0.6B",
-        "judge_model": "ollama:qwen2:8b",
+        "judge_model": "ollama:qwen3:8b",
         "fallback_judge_model": "Qwen/Qwen3-0.6B",
         "moda_dataset": "alpaca_zh",
         "output_dir": "backend/outputs/alpaca-zh-lora",
@@ -46,14 +46,16 @@ PIPELINE_PRESETS: Dict[str, Dict[str, Any]] = {
     },
     # 保留旧名称作为别名
     "search-intent-lora": {
-        "description": "(已更新) 使用中文 Alpaca 数据集进行 LoRA 微调",
+        "description": "使用中文医疗搜索意图数据集进行 LoRA 微调",
         "config": "backend/configs/qwen3-0.6b-mps.yaml",
         "device": "mps",
         "model": "Qwen/Qwen3-0.6B",
-        "judge_model": "ollama:qwen2:8b",
+        "judge_model": "ollama:qwen3:8b",
         "fallback_judge_model": "Qwen/Qwen3-0.6B",
-        "moda_dataset": "alpaca_zh",
-        "output_dir": "backend/outputs/alpaca-zh-lora",
+        "hf_dataset": "wyp/CBlue-KUAKE-QIC",
+        "hf_split": "validation",
+        "hf_fields": "instruction=请判断以下医疗搜索查询的意图类别并输出类别名称。查询：{query},input=,output={label}",
+        "output_dir": "backend/outputs/search-intent-lora",
         "data_format": "alpaca",
         "eval_ratio": 0.1,
     },
@@ -285,6 +287,35 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         default="datasets/modelscope",
         help="Cache directory for ModelScope datasets.",
     )
+    parser.add_argument(
+        "--hf-dataset",
+        default=None,
+        help="Hugging Face dataset id to download automatically.",
+    )
+    parser.add_argument(
+        "--hf-split",
+        default=None,
+        help="Optional split name when using Hugging Face datasets (default: train).",
+    )
+    parser.add_argument(
+        "--hf-fields",
+        default=None,
+        help=(
+            "Comma separated field mapping for Hugging Face datasets, e.g. "
+            "instruction=query,input=context,output=answer."
+        ),
+    )
+    parser.add_argument(
+        "--hf-limit",
+        type=int,
+        default=None,
+        help="Limit the number of samples downloaded from Hugging Face.",
+    )
+    parser.add_argument(
+        "--hf-cache-dir",
+        default="datasets/huggingface",
+        help="Cache directory for Hugging Face datasets.",
+    )
     defaults = {
         action.dest: action.default
         for action in parser._actions
@@ -413,19 +444,47 @@ def main() -> int:
         logger.info("Using pipeline preset '%s'", args.preset)
 
     field_mapping: Dict[str, str] = {}
+    hf_field_mapping: Dict[str, str] = {}
     try:
-        field_mapping = parse_field_mapping(args.moda_fields)
+        if isinstance(args.moda_fields, dict):
+            field_mapping = args.moda_fields
+        else:
+            field_mapping = parse_field_mapping(args.moda_fields)
+        if isinstance(args.hf_fields, dict):
+            hf_field_mapping = args.hf_fields
+        else:
+            hf_field_mapping = parse_field_mapping(args.hf_fields)
     except ValueError as exc:
         progress.fail("解析参数")
         logger.error(str(exc))
         return 1
     progress.complete("解析参数")
 
+    if args.moda_dataset and args.hf_dataset:
+        progress.fail("解析参数")
+        logger.error("--moda-dataset and --hf-dataset cannot be used together.")
+        return 1
+
     dataset_info: Optional[Dict[str, Any]] = None
 
     progress.start("准备数据集")
     log_section("准备数据集")
-    if args.moda_dataset:
+    if args.hf_dataset:
+        try:
+            dataset_info = prepare_huggingface_dataset(
+                dataset_id=args.hf_dataset,
+                split=(args.hf_split or "train"),
+                fields=hf_field_mapping or None,
+                limit=args.hf_limit,
+                cache_dir=args.hf_cache_dir,
+            )
+        except Exception as exc:
+            progress.fail("准备数据集")
+            logger.error("Failed to download Hugging Face dataset: {}", exc)
+            return 1
+        data_path = Path(dataset_info["data_path"])
+        logger.info("Using Hugging Face dataset located at %s", data_path)
+    elif args.moda_dataset:
         manager = ModelScopeDatasetManager(cache_dir=args.moda_cache_dir)
         try:
             dataset_info = manager.prepare_for_training(

@@ -203,6 +203,75 @@ def _normalize_records(records: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]
     return normalized
 
 
+def prepare_huggingface_dataset(
+    dataset_id: str,
+    *,
+    split: str = "train",
+    fields: Optional[Dict[str, str]] = None,
+    limit: Optional[int] = None,
+    cache_dir: Optional[Path | str] = None,
+) -> Dict[str, Any]:
+    """Download and cache a dataset from Hugging Face Hub."""
+
+    try:  # pragma: no cover - optional dependency
+        from datasets import load_dataset  # type: ignore
+    except Exception as exc:  # pragma: no cover - handled at runtime
+        raise RuntimeError(
+            "datasets package is required for Hugging Face downloads. "
+            "Install it with `pip install datasets`."
+        ) from exc
+
+    dataset = load_dataset(dataset_id, split=split)
+
+    if limit is not None:
+        dataset = dataset.select(range(min(limit, len(dataset))))
+
+    raw_records = [
+        {column: example[column] for column in dataset.column_names}
+        for example in dataset
+    ]
+    normalized_raw = _normalize_records(raw_records)
+
+    target_cache = Path(cache_dir or "datasets/huggingface").resolve()
+    target_cache.mkdir(parents=True, exist_ok=True)
+    save_dir = target_cache / dataset_id.replace("/", "_")
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    raw_path = save_dir / f"{split}.raw.json"
+    raw_path.write_text(
+        json.dumps(normalized_raw, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    formatted_records: Optional[List[Dict[str, str]]] = None
+    formatted_path: Optional[Path] = None
+    if fields:
+        formatted_records = ModelScopeDatasetManager._apply_field_mapping(
+            normalized_raw, fields
+        )
+        formatted_path = raw_path.with_suffix(".formatted.json")
+        formatted_path.write_text(
+            json.dumps(formatted_records, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+    config = ModelScopeDatasetConfig(
+        name=dataset_id,
+        dataset_id=dataset_id,
+        split=split,
+        fields=fields or {},
+    )
+
+    return {
+        "config": config,
+        "raw_records": normalized_raw,
+        "formatted_records": formatted_records,
+        "raw_path": str(raw_path),
+        "formatted_path": str(formatted_path) if formatted_path else None,
+        "data_path": str(formatted_path or raw_path),
+    }
+
+
 class ModelScopeDatasetManager:
     """Download and adapt datasets hosted on ModelScope."""
 
